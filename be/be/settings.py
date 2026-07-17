@@ -52,6 +52,9 @@ INSTALLED_APPS = [
 
     'authapi.apps.AuthapiConfig',
     'audit_log',
+    'analysis',
+    'ml_models',
+    'reports',
     'corsheaders',
 ]
 
