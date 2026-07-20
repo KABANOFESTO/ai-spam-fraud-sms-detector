@@ -13,3 +13,10 @@ class IsAdminOrUser(permissions.BasePermission):
         is_admin = IsAdmin().has_permission(request, view)
         is_user = IsUser().has_permission(request, view)
         return is_admin or is_user
+
+
+class IsOwnerOrAdmin(permissions.BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return request.user.is_authenticated and (
+            request.user.role == "Admin" or getattr(obj, "user_id", None) == request.user.id
+        )
