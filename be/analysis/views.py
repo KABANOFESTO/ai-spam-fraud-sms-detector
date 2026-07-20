@@ -13,17 +13,21 @@ from rest_framework.views import APIView
 
 from audit_log.audit_log_utils import log_action
 from authapi.permissions import IsAdmin, IsOwnerOrAdmin
+from analysis.models import TrainingDataset
 from ml_models.models import MLModel
 
 from .models import SMSAnalysis
 from .serializers import (
     AnalysisStatsSerializer,
+    DatasetImportRequestSerializer,
     AnalyzeRequestSerializer,
     BulkAnalyzeRequestSerializer,
+    EvaluationReportSerializer,
     SMSAnalysisSerializer,
+    TrainingDatasetSerializer,
 )
 from .training_serializers import RetrainDetectorRequestSerializer
-from .ml_pipeline import train_and_save_detector
+from .ml_pipeline import load_training_frame, train_and_save_detector
 from .services import SmsFraudDetector, clear_detector_cache
 
 
@@ -277,7 +281,10 @@ class AdminRetrainDetectorView(APIView):
         serializer = RetrainDetectorRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        data_path = Path(serializer.validated_data.get("data_path") or settings.SMS_DETECTOR_TRAINING_DATA_PATH)
+        try:
+            data_path = self._resolve_data_path(serializer.validated_data)
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_404_NOT_FOUND)
         artifact_path = Path(serializer.validated_data.get("artifact_path") or settings.SMS_DETECTOR_MODEL_PATH)
         model_name = serializer.validated_data["model_name"]
         version = serializer.validated_data["version"]
@@ -299,7 +306,7 @@ class AdminRetrainDetectorView(APIView):
             )
 
         try:
-            bundle, metrics, saved_path = train_and_save_detector(
+            bundle, metrics, evaluation_report, saved_path = train_and_save_detector(
                 data_path=data_path,
                 artifact_path=artifact_path,
                 model_name=model_name,
@@ -319,6 +326,7 @@ class AdminRetrainDetectorView(APIView):
                 "training_data_path": str(data_path),
                 "training_samples": int(metrics["train_size"]),
                 "test_samples": int(metrics["test_size"]),
+                "evaluation_report": evaluation_report,
                 "accuracy": metrics["accuracy"],
                 "precision": metrics["precision"],
                 "recall": metrics["recall"],
@@ -354,6 +362,7 @@ class AdminRetrainDetectorView(APIView):
                     "training_data_path": model_record.training_data_path,
                     "training_samples": model_record.training_samples,
                     "test_samples": model_record.test_samples,
+                    "evaluation_report": model_record.evaluation_report,
                     "accuracy": model_record.accuracy,
                     "precision": model_record.precision,
                     "recall": model_record.recall,
@@ -364,3 +373,108 @@ class AdminRetrainDetectorView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+    def _resolve_data_path(self, validated_data):
+        dataset_id = validated_data.get("dataset_id")
+        if dataset_id:
+            dataset = TrainingDataset.objects.filter(id=dataset_id).first()
+            if dataset is None:
+                raise ValueError(f"Training dataset {dataset_id} was not found.")
+            return Path(dataset.stored_file.path)
+
+        data_path = validated_data.get("data_path")
+        if data_path:
+            return Path(data_path)
+        return Path(settings.SMS_DETECTOR_TRAINING_DATA_PATH)
+
+
+class DatasetImportView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+
+    def post(self, request):
+        serializer = DatasetImportRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uploaded_file = serializer.validated_data["file"]
+        notes = serializer.validated_data.get("notes", "")
+
+        if not uploaded_file.name.lower().endswith(".csv"):
+            return Response({"error": "Only CSV files are supported."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            uploaded_file.seek(0)
+            frame = load_training_frame(uploaded_file)
+        except Exception as exc:
+            return Response(
+                {"error": "Invalid dataset file.", "detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        uploaded_file.seek(0)
+
+        dataset = TrainingDataset.objects.create(
+            original_filename=uploaded_file.name,
+            stored_file=uploaded_file,
+            row_count=len(frame),
+            label_distribution=frame["label"].value_counts().to_dict(),
+            imported_by=request.user,
+            notes=notes,
+        )
+
+        log_action(
+            request,
+            "DATASET_IMPORT",
+            target_user=request.user,
+            additional_data={
+                "dataset_id": dataset.id,
+                "original_filename": dataset.original_filename,
+                "row_count": dataset.row_count,
+                "label_distribution": dataset.label_distribution,
+            },
+        )
+
+        return Response(
+            TrainingDatasetSerializer(dataset, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DatasetListView(generics.ListAPIView):
+    serializer_class = TrainingDatasetSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    queryset = TrainingDataset.objects.all().select_related("imported_by")
+
+
+class EvaluationReportView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        model_id = request.query_params.get("model_id")
+        queryset = MLModel.objects.all()
+        if model_id:
+            queryset = queryset.filter(id=model_id)
+        else:
+            queryset = queryset.filter(is_active=True)
+
+        model = queryset.order_by("-trained_at").first()
+        if model is None:
+            return Response({"error": "No trained model found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not model.evaluation_report:
+            return Response(
+                {"error": "Evaluation report not available for the selected model."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        payload = {
+            "model_name": model.model_name,
+            "version": model.version,
+            "accuracy": model.accuracy,
+            "precision": model.precision,
+            "recall": model.recall,
+            "f1_score": model.f1_score,
+            "training_samples": model.training_samples,
+            "test_samples": model.test_samples,
+            **model.evaluation_report,
+        }
+        return Response(EvaluationReportSerializer(payload).data)

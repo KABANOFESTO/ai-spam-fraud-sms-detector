@@ -15,6 +15,8 @@ class MLModel(models.Model):
 
     test_samples = models.PositiveIntegerField(default=0)
 
+    evaluation_report = models.JSONField(default=dict, blank=True)
+
     accuracy = models.FloatField()
 
     precision = models.FloatField()

@@ -3,6 +3,9 @@ from django.urls import path
 from .views import (
     ActiveModelView,
     AdminRetrainDetectorView,
+    DatasetImportView,
+    DatasetListView,
+    EvaluationReportView,
     AnalysisDetailView,
     AnalysisHistoryView,
     AnalysisStatsView,
@@ -19,4 +22,7 @@ urlpatterns = [
     path("dashboard/", DashboardView.as_view(), name="analysis-dashboard"),
     path("models/", ActiveModelView.as_view(), name="analysis-active-models"),
     path("admin/retrain/", AdminRetrainDetectorView.as_view(), name="analysis-admin-retrain"),
+    path("admin/datasets/import/", DatasetImportView.as_view(), name="analysis-dataset-import"),
+    path("admin/datasets/", DatasetListView.as_view(), name="analysis-dataset-list"),
+    path("admin/evaluation/", EvaluationReportView.as_view(), name="analysis-evaluation-report"),
 ]

@@ -6,6 +6,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from analysis.ml_pipeline import train_and_save_detector
+from analysis.models import TrainingDataset
 from ml_models.models import MLModel
 
 
@@ -18,6 +19,13 @@ class Command(BaseCommand):
             dest="data_path",
             default=None,
             help="Path to a CSV file with message and label columns.",
+        )
+        parser.add_argument(
+            "--dataset-id",
+            dest="dataset_id",
+            type=int,
+            default=None,
+            help="TrainingDataset ID to use as the CSV source.",
         )
         parser.add_argument(
             "--artifact",
@@ -44,7 +52,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        data_path = Path(options["data_path"] or settings.SMS_DETECTOR_TRAINING_DATA_PATH)
+        data_path = self._resolve_data_path(options)
         artifact_path = Path(options["artifact_path"] or settings.SMS_DETECTOR_MODEL_PATH)
         model_name = options["model_name"]
         version = options["version"]
@@ -57,7 +65,7 @@ class Command(BaseCommand):
             return
 
         self.stdout.write(f"Loading training data from {data_path}")
-        bundle, metrics, saved_path = train_and_save_detector(
+        bundle, metrics, evaluation_report, saved_path = train_and_save_detector(
             data_path=data_path,
             artifact_path=artifact_path,
             model_name=model_name,
@@ -72,6 +80,7 @@ class Command(BaseCommand):
                 "training_data_path": str(data_path),
                 "training_samples": int(metrics["train_size"]),
                 "test_samples": int(metrics["test_size"]),
+                "evaluation_report": evaluation_report,
                 "accuracy": metrics["accuracy"],
                 "precision": metrics["precision"],
                 "recall": metrics["recall"],
@@ -90,3 +99,12 @@ class Command(BaseCommand):
             f"recall={metrics['recall']:.4f}, "
             f"f1={metrics['f1_score']:.4f}"
         )
+
+    def _resolve_data_path(self, options):
+        dataset_id = options.get("dataset_id")
+        if dataset_id:
+            dataset = TrainingDataset.objects.filter(id=dataset_id).first()
+            if dataset is None:
+                raise CommandError(f"Training dataset {dataset_id} was not found.")
+            return Path(dataset.stored_file.path)
+        return Path(options["data_path"] or settings.SMS_DETECTOR_TRAINING_DATA_PATH)

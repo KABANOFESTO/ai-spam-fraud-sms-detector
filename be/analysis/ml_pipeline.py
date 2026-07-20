@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, precision_recall_fscore_support
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
@@ -34,6 +34,7 @@ class DetectorBundle:
     model_name: str
     version: str
     metrics: dict[str, float]
+    evaluation_report: dict[str, Any]
     classes: list[str]
     feature_name: str = "message"
     label_name: str = "label"
@@ -91,7 +92,7 @@ def build_pipeline() -> Pipeline:
     )
 
 
-def train_detector(df: pd.DataFrame, model_name: str, version: str, test_size: float = 0.2, random_state: int = 42) -> tuple[DetectorBundle, dict[str, float]]:
+def train_detector(df: pd.DataFrame, model_name: str, version: str, test_size: float = 0.2, random_state: int = 42) -> tuple[DetectorBundle, dict[str, float], dict[str, Any]]:
     if df.empty:
         raise ValueError("Training data is empty.")
 
@@ -109,6 +110,16 @@ def train_detector(df: pd.DataFrame, model_name: str, version: str, test_size: f
     y_pred = pipeline.predict(test_df["message"])
     accuracy = accuracy_score(y_true, y_pred)
     precision, recall, f1, _ = precision_recall_fscore_support(y_true, y_pred, average="weighted", zero_division=0)
+    labels = list(VALID_LABELS)
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    report = classification_report(
+        y_true,
+        y_pred,
+        labels=labels,
+        target_names=labels,
+        output_dict=True,
+        zero_division=0,
+    )
 
     bundle = DetectorBundle(
         pipeline=pipeline,
@@ -122,9 +133,14 @@ def train_detector(df: pd.DataFrame, model_name: str, version: str, test_size: f
             "train_size": float(len(train_df)),
             "test_size": float(len(test_df)),
         },
+        evaluation_report={
+            "confusion_matrix": cm.tolist(),
+            "labels": labels,
+            "classification_report": report,
+        },
         classes=list(pipeline.named_steps["classifier"].classes_),
     )
-    return bundle, bundle.metrics
+    return bundle, bundle.metrics, bundle.evaluation_report
 
 
 def save_detector_bundle(bundle: DetectorBundle, path: str | Path) -> Path:
@@ -139,11 +155,11 @@ def train_and_save_detector(
     artifact_path: str | Path,
     model_name: str,
     version: str,
-) -> tuple[DetectorBundle, dict[str, float], Path]:
+) -> tuple[DetectorBundle, dict[str, float], dict[str, Any], Path]:
     frame = load_training_frame(data_path)
-    bundle, metrics = train_detector(frame, model_name=model_name, version=version)
+    bundle, metrics, evaluation_report = train_detector(frame, model_name=model_name, version=version)
     saved_path = save_detector_bundle(bundle, artifact_path)
-    return bundle, metrics, saved_path
+    return bundle, metrics, evaluation_report, saved_path
 
 
 def load_detector_bundle(path: str | Path) -> DetectorBundle:
