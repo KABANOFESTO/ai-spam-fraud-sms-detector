@@ -27,12 +27,15 @@ if ENV_FILE.exists():
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-+a7=w)yv0mg!83dl9auhx+21-0k2d@_@gel=qd39j97l^bo5ks'
+SECRET_KEY = env("DJANGO_SECRET_KEY", default="change-me")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env.bool("DJANGO_DEBUG", default=False)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env.list(
+    "DJANGO_ALLOWED_HOSTS",
+    default=["localhost", "127.0.0.1"],
+)
 
 
 # Application definition
@@ -61,6 +64,13 @@ INSTALLED_APPS = [
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": env.int("REST_FRAMEWORK_PAGE_SIZE", default=20),
+    "DEFAULT_FILTER_BACKENDS": (
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
     ),
 }
 
@@ -104,6 +114,10 @@ CORS_ALLOWED_ORIGINS = env.list(
     "CORS_ALLOWED_ORIGINS",
     default=["http://localhost:3000", "http://127.0.0.1:3000"],
 )
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=["http://localhost:3000", "http://127.0.0.1:3000"],
+)
 
 ROOT_URLCONF = 'be.urls'
 
@@ -123,16 +137,23 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'backend.wsgi.application'
+WSGI_APPLICATION = 'be.wsgi.application'
 
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+db_engine = env("DB_ENGINE", default="django.db.backends.sqlite3")
+
+if db_engine == "django.db.backends.sqlite3":
+    database_name = env("DB_NAME", default=str(BASE_DIR / "db.sqlite3"))
+else:
+    database_name = env("DB_NAME", default="sms_fraud_detector_db")
+
 DATABASES = {
     "default": {
-        "ENGINE": env("DB_ENGINE", default="django.db.backends.postgresql"),
-        "NAME": env("DB_NAME", default="sms_fraud_detector_db"),
+        "ENGINE": db_engine,
+        "NAME": database_name,
         "USER": env("DB_USER", default="postgres"),
         "PASSWORD": env("DB_PASSWORD", default=""),
         "HOST": env("DB_HOST", default="localhost"),
@@ -195,3 +216,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = "authapi.User"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+ARTIFACTS_DIR = BASE_DIR / "artifacts"
+SMS_DETECTOR_MODEL_PATH = env(
+    "SMS_DETECTOR_MODEL_PATH",
+    default=str(ARTIFACTS_DIR / "sms_detector.joblib"),
+)
+SMS_DETECTOR_TRAINING_DATA_PATH = env(
+    "SMS_DETECTOR_TRAINING_DATA_PATH",
+    default=str(BASE_DIR / "analysis" / "data" / "sms_training_data.csv"),
+)

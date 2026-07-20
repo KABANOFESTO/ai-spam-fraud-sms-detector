@@ -14,16 +14,34 @@ class SMSAnalysis(models.Model):
 
     message = models.TextField()
 
+    normalized_message = models.TextField(blank=True, default="")
+
     prediction = models.CharField(max_length=20, choices=PREDICTION_CHOICES)
 
     confidence = models.DecimalField(max_digits=5, decimal_places=2)
 
+    risk_score = models.PositiveSmallIntegerField(default=0)
+
     is_suspicious = models.BooleanField(default=False)
+
+    matched_signals = models.JSONField(default=list, blank=True)
+
+    model_name = models.CharField(max_length=100, default="HybridKeywordDetector")
+
+    model_version = models.CharField(max_length=20, default="1.0")
+
+    explanation = models.TextField(blank=True, default="")
+
+    processing_time_ms = models.PositiveIntegerField(default=0)
 
     analyzed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-analyzed_at"]
+        indexes = [
+            models.Index(fields=["user", "analyzed_at"]),
+            models.Index(fields=["prediction", "is_suspicious"]),
+        ]
 
     def __str__(self):
         return f"{self.prediction} ({self.confidence}%)"

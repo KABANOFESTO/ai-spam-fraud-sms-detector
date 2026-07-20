@@ -7,6 +7,14 @@ class MLModel(models.Model):
 
     version = models.CharField(max_length=20)
 
+    artifact_path = models.CharField(max_length=500, blank=True, default="")
+
+    training_data_path = models.CharField(max_length=500, blank=True, default="")
+
+    training_samples = models.PositiveIntegerField(default=0)
+
+    test_samples = models.PositiveIntegerField(default=0)
+
     accuracy = models.FloatField()
 
     precision = models.FloatField()

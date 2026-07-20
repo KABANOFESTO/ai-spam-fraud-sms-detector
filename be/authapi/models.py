@@ -47,10 +47,7 @@ class User(AbstractUser):
     
     def save(self, *args, **kwargs):
         """Override save to keep is_active and status fields synchronized"""
-        if self.status == 'Active':
-            self.is_active = True
-        else:
-            self.is_active = False
+        self.is_active = self.status == 'Active'
         
         super().save(*args, **kwargs)
     
