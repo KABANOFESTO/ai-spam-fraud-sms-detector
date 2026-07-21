@@ -1,0 +1,11 @@
+<resources>
+    <color name="sms_bg">#081018</color>
+    <color name="sms_surface">#101A26</color>
+    <color name="sms_surface_alt">#152131</color>
+    <color name="sms_primary">#34D399</color>
+    <color name="sms_secondary">#60A5FA</color>
+    <color name="sms_accent">#FBBF24</color>
+    <color name="sms_error">#F87171</color>
+    <color name="sms_text">#F8FAFC</color>
+    <color name="sms_text_muted">#94A3B8</color>
+</resources>
