@@ -1,0 +1,20 @@
+# Shared OS / editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local tooling and caches
+.gradle-home/
+.idea/
+*.iml
+
+# Local environment files
+.env
+.env.*
+
+# Logs and temporary artifacts
+*.log
+*.tmp
+*.swp
+*.bak
+

@@ -3,9 +3,9 @@ package com.smsai.smsfrauddetector.features.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.smsai.smsfrauddetector.core.common.ApiResult
-import com.smsai.smsfrauddetector.data.remote.dto.ActiveModelDto
 import com.smsai.smsfrauddetector.data.remote.dto.HealthDto
 import com.smsai.smsfrauddetector.data.remote.dto.StatsDto
+import com.smsai.smsfrauddetector.data.remote.dto.ModelDto
 import com.smsai.smsfrauddetector.data.remote.dto.UserDto
 import com.smsai.smsfrauddetector.data.repository.AppRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +18,7 @@ data class HomeUiState(
     val user: UserDto? = null,
     val stats: StatsDto? = null,
     val health: HealthDto? = null,
-    val activeModel: ActiveModelDto? = null,
+    val activeModel: ModelDto? = null,
     val error: String? = null,
 )
 

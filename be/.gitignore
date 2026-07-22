@@ -1,5 +1,24 @@
-# env files (can opt-in for committing if needed)
-.env*
-.env.local
-.venv
+# Python / virtualenv
+.venv/
+venv/
+env/
 
+# Environment files
+.env
+.env.*
+
+# Python caches and test artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build / packaging outputs
+build/
+dist/
+*.egg-info/
