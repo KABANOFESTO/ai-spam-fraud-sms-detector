@@ -1,8 +1,19 @@
-# Ignore Gradle project-specific cache directory
-.gradle
+# Android / Gradle
+.gradle/
+build/
+**/build/
+.kotlin/
+.externalNativeBuild/
+.cxx/
 
-# Ignore Gradle build output directory
-build
+# Android Studio
+.idea/
+*.iml
+local.properties
 
-# Ignore Kotlin plugin data
-.kotlin
+# Packaged outputs
+*.apk
+*.aab
+*.hprof
+captures/
+local-plugin-repo/

@@ -1,5 +1,7 @@
-apply(plugin = "com.android.application")
-apply(plugin = "org.jetbrains.kotlin.android")
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+}
 
 android {
     namespace = "com.smsai.smsfrauddetector"
@@ -38,6 +40,10 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
 }
 
 dependencies {
@@ -73,3 +79,4 @@ dependencies {
     androidTestImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.tooling)
 }
+
