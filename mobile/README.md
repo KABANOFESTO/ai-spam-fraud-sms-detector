@@ -22,9 +22,9 @@ Modern Android client for the AI-Based Spam/Fraud SMS Detector backend.
 
 ## Backend Connection
 
-The app uses this default base URL for Android emulators:
+The app now uses this default backend base URL:
 
-- `http://10.0.2.2:8000/`
+- `https://ai-spam-fraud-sms-detector.onrender.com/`
 
 You can change the backend base URL in the app settings screen.
 
@@ -62,5 +62,4 @@ SMS permissions are needed for incoming-message monitoring.
 
 - The module is structured as a real Android app, not a CLI sample.
 - The mobile app depends on the backend API being reachable.
-- If you use a physical device, replace the default base URL with your machine IP address and backend port.
-
+- If you need to test against a different backend, change the base URL in the app settings screen.
