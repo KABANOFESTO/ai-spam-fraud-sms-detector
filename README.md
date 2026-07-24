@@ -39,9 +39,9 @@ For Render, use a manual Python web service with the root directory set to `be`.
 
 The Android app is located in `mobile/` and connects to the backend by default at:
 
-- `http://10.0.2.2:8000/`
+- `https://ai-spam-fraud-sms-detector.onrender.com/`
 
-This is the correct localhost address for the Android emulator.
+This is the default production backend URL used by the app.
 The app reads its API base URL from the mobile settings and `BuildConfig.DEFAULT_BASE_URL`; it does not use the backend `FRONTEND_URL` values.
 
 ## Getting Started
@@ -55,6 +55,6 @@ The app reads its API base URL from the mobile settings and `BuildConfig.DEFAULT
 
 - SMS permissions are required for receiver-based monitoring.
 - The app uses the backend API for login, analysis, history, reports, and admin features.
-- For production, update the backend base URL in the app settings.
+- For alternate environments, update the backend base URL in the app settings.
 - Backend `FRONTEND_URL` and `FRONTEND_LOGIN_URL` are only for emailed auth links, not for the Android API connection.
 - On Render, set `PYTHON_VERSION=3.12.8` and use `DATABASE_URL` from the Render Postgres service.
