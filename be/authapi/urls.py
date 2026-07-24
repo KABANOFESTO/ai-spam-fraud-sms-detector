@@ -5,6 +5,7 @@ from .views import (
     AdminUserCreateView,
     AdminUserDeleteView,
     AdminUserUpdateView,
+    BootstrapAdminView,
     CurrentUserView,
     ForgotPasswordView,
     LogoutView,
@@ -20,6 +21,7 @@ from .views import (
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
+    path('bootstrap-admin/', BootstrapAdminView.as_view(), name='bootstrap-admin'),
     path('login/', MyTokenObtainView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('admin-data/', AdminOnlyView.as_view(), name='admin-data'),
