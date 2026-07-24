@@ -32,7 +32,8 @@ The backend exposes REST endpoints for:
 - Dataset import
 - Model evaluation
 
-See the backend README inside `be/` for setup and API details.
+For local development, see the backend README inside `be/` for setup and API details.
+For Render, use a manual Python web service with the root directory set to `be`.
 
 ## Mobile App
 
@@ -56,3 +57,4 @@ The app reads its API base URL from the mobile settings and `BuildConfig.DEFAULT
 - The app uses the backend API for login, analysis, history, reports, and admin features.
 - For production, update the backend base URL in the app settings.
 - Backend `FRONTEND_URL` and `FRONTEND_LOGIN_URL` are only for emailed auth links, not for the Android API connection.
+- On Render, set `PYTHON_VERSION=3.12.8` and use `DATABASE_URL` from the Render Postgres service.

@@ -39,6 +39,18 @@ Django REST API for authenticating users, classifying SMS messages, tracking ana
 4. Run migrations.
 5. Start the server with `python manage.py runserver`.
 
+### Render Deployment
+
+For a manual Render setup:
+
+1. Create a Python Web Service.
+2. Set the root directory to `be`.
+3. Use `pip install -r requirements.txt` as the build command.
+4. Use `gunicorn be.wsgi:application --bind 0.0.0.0:$PORT` as the start command.
+5. Set `PYTHON_VERSION=3.12.8` in the Render environment variables.
+6. Prefer `DATABASE_URL` from Render Postgres, or use the `DB_*` variables if you are connecting manually.
+7. Run migrations once the service is created.
+
 ### Training The SMS Detector
 
 1. Use the bundled starter dataset at `analysis/data/sms_training_data.csv` or upload your own labeled CSV through the admin dataset import endpoint.
@@ -67,4 +79,5 @@ python manage.py train_sms_detector --dataset-id 1
 - `SMS_DETECTOR_MODEL_PATH` sets the joblib artifact path.
 - `SMS_DETECTOR_TRAINING_DATA_PATH` sets the default training CSV path.
 - `MEDIA_ROOT` stores imported datasets and profile images.
+- `DATABASE_URL` is preferred on Render; the older `DB_*` variables are still supported.
 - `DJANGO_ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` should be set for your deployment hostnames.
