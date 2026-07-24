@@ -41,6 +41,7 @@ The Android app is located in `mobile/` and connects to the backend by default a
 - `http://10.0.2.2:8000/`
 
 This is the correct localhost address for the Android emulator.
+The app reads its API base URL from the mobile settings and `BuildConfig.DEFAULT_BASE_URL`; it does not use the backend `FRONTEND_URL` values.
 
 ## Getting Started
 
@@ -54,4 +55,4 @@ This is the correct localhost address for the Android emulator.
 - SMS permissions are required for receiver-based monitoring.
 - The app uses the backend API for login, analysis, history, reports, and admin features.
 - For production, update the backend base URL in the app settings.
-
+- Backend `FRONTEND_URL` and `FRONTEND_LOGIN_URL` are only for emailed auth links, not for the Android API connection.
