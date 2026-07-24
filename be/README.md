@@ -28,6 +28,8 @@ Django REST API for authenticating users, classifying SMS messages, tracking ana
 - The analyze endpoint returns prediction, confidence, risk score, matched signals, and explanation.
 - History, report, and dashboard endpoints are pagination/filter friendly.
 - Profile images are served from `MEDIA_URL`.
+- The Android app talks to the backend API directly; it does not use the web frontend URLs in `.env`.
+- `FRONTEND_URL` and `FRONTEND_LOGIN_URL` are only used in auth emails for optional web or deep-link flows.
 
 ### Local Setup
 
