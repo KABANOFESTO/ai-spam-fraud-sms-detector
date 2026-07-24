@@ -18,6 +18,7 @@ from .models import User
 from .permissions import IsAdmin, IsOwnerOrAdmin, IsUser
 from .serializers import (
     AdminUserCreateSerializer,
+    BootstrapAdminSerializer,
     AuthTokenSerializer,
     LogoutSerializer,
     ProfileUpdateSerializer,
@@ -58,6 +59,44 @@ class RegisterView(generics.CreateAPIView):
                 "message": "Registration successful.",
                 "tokens": tokens,
                 "user": UserSerializer(user, context={"request": request}).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class BootstrapAdminView(generics.CreateAPIView):
+    serializer_class = BootstrapAdminSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        if User.objects.filter(role="Admin").exists():
+            return Response(
+                {"error": "An admin account already exists. Use the authenticated admin create endpoint."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        log_action(
+            request,
+            "USER_CREATE",
+            target_user=user,
+            additional_data={
+                "registration_method": "bootstrap_admin",
+                "role": user.role,
+                "bootstrap_admin": True,
+            },
+        )
+
+        tokens = _build_tokens(user)
+        return Response(
+            {
+                "message": "Initial admin account created successfully.",
+                "tokens": tokens,
+                "user": UserSerializer(user, context={"request": request}).data,
+                "temporary_password": user.temporary_password,
             },
             status=status.HTTP_201_CREATED,
         )

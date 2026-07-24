@@ -56,6 +56,39 @@ class AdminUserCreateSerializer(serializers.ModelSerializer):
         return user
 
 
+class BootstrapAdminSerializer(serializers.ModelSerializer):
+    temporary_password = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ("username", "email", "password", "first_name", "last_name", "temporary_password")
+        extra_kwargs = {
+            "password": {"write_only": True, "required": False},
+        }
+
+    def validate_email(self, value):
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
+    def create(self, validated_data):
+        password = validated_data.get("password") or User.generate_random_password()
+        user = User.objects.create_user(
+            username=validated_data["username"],
+            email=validated_data["email"].lower(),
+            password=password,
+            first_name=validated_data.get("first_name", ""),
+            last_name=validated_data.get("last_name", ""),
+            role="Admin",
+            status="Active",
+        )
+        user.is_staff = True
+        user.is_superuser = True
+        user.save(update_fields=["is_staff", "is_superuser"])
+        user.temporary_password = password
+        return user
+
+
 class UserSerializer(serializers.ModelSerializer):
     profile_picture_url = serializers.SerializerMethodField()
 
