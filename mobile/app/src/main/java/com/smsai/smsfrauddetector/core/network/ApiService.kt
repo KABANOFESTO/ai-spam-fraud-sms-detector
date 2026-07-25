@@ -14,6 +14,7 @@ import com.smsai.smsfrauddetector.data.remote.dto.LogoutRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.ModelDto
 import com.smsai.smsfrauddetector.data.remote.dto.PaginatedResponse
 import com.smsai.smsfrauddetector.data.remote.dto.ProfileUpdateResponseDto
+import com.smsai.smsfrauddetector.data.remote.dto.RegisterResponseDto
 import com.smsai.smsfrauddetector.data.remote.dto.RegisterRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.ReportRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.StatsDto
@@ -40,7 +41,7 @@ interface ApiService {
     suspend fun login(@Body request: LoginRequestDto): AuthResponseDto
 
     @POST("api/auth/register/")
-    suspend fun register(@Body request: RegisterRequestDto): AuthResponseDto
+    suspend fun register(@Body request: RegisterRequestDto): RegisterResponseDto
 
     @POST("api/auth/logout/")
     suspend fun logout(@Body request: LogoutRequestDto): Map<String, String>

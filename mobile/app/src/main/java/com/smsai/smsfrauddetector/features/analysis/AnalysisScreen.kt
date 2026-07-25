@@ -1,6 +1,7 @@
 package com.smsai.smsfrauddetector.features.analysis
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,8 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.CrisisAlert
@@ -39,7 +46,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.smsai.smsfrauddetector.core.common.ApiResult
 import com.smsai.smsfrauddetector.core.common.SimpleViewModelFactory
+import com.smsai.smsfrauddetector.core.designsystem.components.BannerTone
 import com.smsai.smsfrauddetector.core.designsystem.components.ErrorStateCard
+import com.smsai.smsfrauddetector.core.designsystem.components.FeedbackBanner
 import com.smsai.smsfrauddetector.core.designsystem.components.PrimaryButton
 import com.smsai.smsfrauddetector.core.designsystem.components.StatusBadge
 import com.smsai.smsfrauddetector.core.designsystem.components.SurfaceCard
@@ -112,92 +121,119 @@ fun AnalysisScreen(
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
     var message by rememberSaveable { mutableStateOf("") }
+    var bannerMessage by remember { mutableStateOf<String?>(null) }
+    var bannerTone by remember { mutableStateOf(BannerTone.Info) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(text = "Analyze SMS", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text(text = "Paste or type the suspicious SMS content and let the model classify it.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
-                OutlinedTextField(
-                    value = message,
-                    onValueChange = { message = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 4,
-                    label = { Text("SMS message") },
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    PrimaryButton(
-                        text = "Analyze",
-                        modifier = Modifier.weight(1f),
-                        enabled = !state.analyzing,
-                        onClick = { viewModel.analyze(message) },
-                        trailingIcon = true,
+    LaunchedEffect(state.reportStatus) {
+        val status = state.reportStatus ?: return@LaunchedEffect
+        bannerMessage = status
+        bannerTone = if (status.contains("created", ignoreCase = true) || status.contains("submitted", ignoreCase = true)) {
+            BannerTone.Success
+        } else {
+            BannerTone.Error
+        }
+        kotlinx.coroutines.delay(2400)
+        bannerMessage = null
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(text = "Analyze SMS", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text(text = "Paste or type the suspicious SMS content and let the model classify it.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
+                    OutlinedTextField(
+                        value = message,
+                        onValueChange = { message = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 4,
+                        label = { Text("SMS message") },
                     )
-                    PrimaryButton(
-                        text = "Clear",
-                        modifier = Modifier.weight(1f),
-                        enabled = !state.analyzing,
-                        onClick = { message = ""; viewModel.clear() },
-                    )
-                }
-                if (state.analyzing) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.width(24.dp).height(24.dp), strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text("Analyzing message...")
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        PrimaryButton(
+                            text = "Analyze",
+                            modifier = Modifier.weight(1f),
+                            enabled = !state.analyzing,
+                            onClick = { viewModel.analyze(message) },
+                            trailingIcon = true,
+                        )
+                        PrimaryButton(
+                            text = "Clear",
+                            modifier = Modifier.weight(1f),
+                            enabled = !state.analyzing,
+                            onClick = { message = ""; viewModel.clear() },
+                        )
+                    }
+                    if (state.analyzing) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.width(24.dp).height(24.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Analyzing message...")
+                        }
+                    }
+                    state.error?.let {
+                        ErrorStateCard(
+                            message = it,
+                            retryText = "Retry analysis",
+                            onRetry = { viewModel.retryLastAnalysis() },
+                        )
                     }
                 }
-                state.error?.let {
-                    ErrorStateCard(
-                        message = it,
-                        retryText = "Retry analysis",
-                        onRetry = { viewModel.retryLastAnalysis() },
-                    )
+            }
+
+            state.result?.let { result ->
+                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatusBadge(
+                            text = result.prediction.uppercase(),
+                            color = if (result.isSuspicious) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        )
+                        Text(text = "Confidence ${(result.confidence * 100).roundToInt()}%", style = MaterialTheme.typography.headlineMedium)
+                        Text(text = result.explanation ?: "Model analysis completed successfully.")
+                        Text(text = "Matched signals", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (result.matchedSignals.isEmpty()) {
+                                Text("No specific signals matched.")
+                            } else {
+                                result.matchedSignals.take(4).forEach { signal ->
+                                    FilterChip(selected = true, onClick = {}, label = { Text(signal) })
+                                }
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            PrimaryButton(
+                                text = "Save report",
+                                modifier = Modifier.weight(1f),
+                                enabled = result.isSuspicious,
+                                onClick = { viewModel.createReport(result.message, result.id) },
+                            )
+                            PrimaryButton(
+                                text = "Reset",
+                                modifier = Modifier.weight(1f),
+                                onClick = { viewModel.clear(); message = "" },
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        state.result?.let { result ->
-            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatusBadge(
-                        text = result.prediction.uppercase(),
-                        color = if (result.isSuspicious) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                    )
-                    Text(text = "Confidence ${(result.confidence * 100).roundToInt()}%", style = MaterialTheme.typography.headlineMedium)
-                    Text(text = result.explanation ?: "Model analysis completed successfully.")
-                    Text(text = "Matched signals", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (result.matchedSignals.isEmpty()) {
-                            Text("No specific signals matched.")
-                        } else {
-                            result.matchedSignals.take(4).forEach { signal ->
-                                FilterChip(selected = true, onClick = {}, label = { Text(signal) })
-                            }
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PrimaryButton(
-                            text = "Save report",
-                            modifier = Modifier.weight(1f),
-                            enabled = result.isSuspicious,
-                            onClick = { viewModel.createReport(result.message, result.id) },
-                        )
-                        PrimaryButton(
-                            text = "Reset",
-                            modifier = Modifier.weight(1f),
-                            onClick = { viewModel.clear(); message = "" },
-                        )
-                    }
-                    state.reportStatus?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-                }
-            }
+        AnimatedVisibility(
+            visible = bannerMessage != null,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+                .widthIn(max = 520.dp),
+            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+        ) {
+            bannerMessage?.let { FeedbackBanner(message = it, tone = bannerTone) }
         }
     }
 }

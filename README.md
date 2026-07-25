@@ -53,7 +53,7 @@ The app reads its API base URL from the mobile settings and `BuildConfig.DEFAULT
 
 ## Notes
 
-- SMS permissions are required for receiver-based monitoring.
+- Automatic SMS tracking requires the app to be the default SMS handler on the device, plus SMS and notification permissions.
 - The app uses the backend API for login, analysis, history, reports, and admin features.
 - For alternate environments, update the backend base URL in the app settings.
 - Backend `FRONTEND_URL` and `FRONTEND_LOGIN_URL` are only for emailed auth links, not for the Android API connection.
