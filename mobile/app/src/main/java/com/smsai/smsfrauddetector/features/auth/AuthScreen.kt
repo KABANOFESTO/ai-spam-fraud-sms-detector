@@ -206,11 +206,6 @@ fun AuthScreen(
             }
 
             Spacer(modifier = Modifier.height(18.dp))
-            Text(
-                text = "Backend: ${BuildConfig.DEFAULT_BASE_URL}",
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.48f),
-                style = MaterialTheme.typography.labelSmall,
-            )
         }
     }
 }
