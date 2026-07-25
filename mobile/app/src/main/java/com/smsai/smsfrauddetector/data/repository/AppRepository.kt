@@ -104,8 +104,14 @@ class AppRepository(
                 lastName = lastName.trim().ifBlank { null },
             ),
         )
-        sessionStore.saveSession(response)
-        UserSession(response.access, response.refresh, response.user)
+        val authTokens = response.tokens
+        val sessionResponse = com.smsai.smsfrauddetector.data.remote.dto.AuthResponseDto(
+            refresh = authTokens.refresh,
+            access = authTokens.access,
+            user = response.user,
+        )
+        sessionStore.saveSession(sessionResponse)
+        UserSession(sessionResponse.access, sessionResponse.refresh, sessionResponse.user)
     }
 
     suspend fun logout(): ApiResult<Unit> = call {

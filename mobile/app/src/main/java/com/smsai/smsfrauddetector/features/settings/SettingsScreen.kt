@@ -5,12 +5,19 @@ import android.content.Context
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -21,8 +28,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -32,7 +40,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.smsai.smsfrauddetector.core.common.SimpleViewModelFactory
+import com.smsai.smsfrauddetector.core.designsystem.components.BannerTone
 import com.smsai.smsfrauddetector.core.designsystem.components.ErrorStateCard
+import com.smsai.smsfrauddetector.core.designsystem.components.FeedbackBanner
 import com.smsai.smsfrauddetector.core.designsystem.components.PrimaryButton
 import com.smsai.smsfrauddetector.core.designsystem.components.StatusBadge
 import com.smsai.smsfrauddetector.core.designsystem.components.SurfaceCard
@@ -100,6 +110,7 @@ fun SettingsScreen(repository: AppRepository) {
     var baseUrl by rememberSaveable { mutableStateOf("") }
     var darkMode by rememberSaveable { mutableStateOf(true) }
     var trackingStatusMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var statusTone by remember { mutableStateOf(BannerTone.Info) }
     var statusRefresh by remember { mutableIntStateOf(0) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -118,7 +129,12 @@ fun SettingsScreen(repository: AppRepository) {
     ) { granted ->
         statusRefresh += 1
         if (granted) {
-            evaluateTrackingSetup(context, viewModel, onStatus = { trackingStatusMessage = it }, notificationPermissionLauncher = notificationPermissionLauncher)
+            evaluateTrackingSetup(
+                context,
+                viewModel,
+                onStatus = { trackingStatusMessage = it },
+                notificationPermissionLauncher = notificationPermissionLauncher,
+            )
         } else {
             trackingStatusMessage = "SMS permission is required for automatic message tracking."
         }
@@ -152,104 +168,130 @@ fun SettingsScreen(repository: AppRepository) {
         }
     }
 
+    LaunchedEffect(trackingStatusMessage) {
+        val status = trackingStatusMessage ?: return@LaunchedEffect
+        statusTone = when {
+            status.contains("enabled", ignoreCase = true) ||
+                status.contains("off", ignoreCase = true) ||
+                status.contains("refreshed", ignoreCase = true) -> BannerTone.Success
+            status.contains("required", ignoreCase = true) ||
+                status.contains("missing", ignoreCase = true) ||
+                status.contains("first", ignoreCase = true) ||
+                status.contains("continue", ignoreCase = true) -> BannerTone.Error
+            else -> BannerTone.Info
+        }
+        kotlinx.coroutines.delay(2400)
+        trackingStatusMessage = null
+    }
+
     val defaultSmsApp = remember(statusRefresh) { SmsTrackingPermissions.isDefaultSmsApp(context) }
     val smsPermissionGranted = remember(statusRefresh) { SmsTrackingPermissions.isSmsPermissionGranted(context) }
     val notificationPermissionGranted = remember(statusRefresh) { SmsTrackingPermissions.isNotificationPermissionGranted(context) }
     val trackingReady = remember(statusRefresh) { SmsTrackingPermissions.canTrackAutomatically(context) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(text = "Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(text = "Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
-        state.error?.let {
-            ErrorStateCard(message = it, retryText = "Reload settings", onRetry = { viewModel.load() })
-        }
-
-        SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(text = "Core app settings", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(
-                    value = baseUrl,
-                    onValueChange = { baseUrl = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Backend base URL") },
-                )
-                RowSetting("Dark mode", darkMode) { darkMode = it }
-                PrimaryButton(text = "Save settings", onClick = { viewModel.save(baseUrl, darkMode) })
+            state.error?.let {
+                ErrorStateCard(message = it, retryText = "Reload settings", onRetry = { viewModel.load() })
             }
-        }
 
-        SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(text = "Automatic SMS tracking", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                Text(
-                    text = "For real-time fraud detection, the app must be the default SMS handler, and SMS + notification permissions must be granted.",
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatusBadge(
-                        text = if (defaultSmsApp) "Default SMS app" else "Not default",
-                        color = if (defaultSmsApp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(text = "Core app settings", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(
+                        value = baseUrl,
+                        onValueChange = { baseUrl = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Backend base URL") },
                     )
-                    StatusBadge(
-                        text = if (smsPermissionGranted) "SMS permission" else "SMS permission missing",
-                        color = if (smsPermissionGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                    )
-                    StatusBadge(
-                        text = if (notificationPermissionGranted) "Alerts enabled" else "Alerts missing",
-                        color = if (notificationPermissionGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                    )
-                }
-
-                Text(
-                    text = when {
-                        state.smsMonitoring && trackingReady -> "Automatic tracking is active."
-                        state.smsMonitoring -> "Tracking is enabled, but the device is not currently ready."
-                        else -> "Automatic tracking is disabled."
-                    },
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
-                )
-
-                PrimaryButton(
-                    text = if (state.smsMonitoring) "Disable tracking" else "Enable tracking",
-                    onClick = {
-                        if (state.smsMonitoring) {
-                            viewModel.setSmsMonitoringEnabled(false)
-                            trackingStatusMessage = "Automatic SMS tracking has been turned off."
-                        } else {
-                            startAutomaticTrackingSetup(
-                                context = context,
-                                viewModel = viewModel,
-                                defaultSmsLauncher = defaultSmsLauncher,
-                                smsPermissionLauncher = smsPermissionLauncher,
-                                notificationPermissionLauncher = notificationPermissionLauncher,
-                                onStatus = { trackingStatusMessage = it },
-                            )
-                        }
-                    },
-                )
-
-                PrimaryButton(
-                    text = if (defaultSmsApp) "Refresh SMS status" else "Set as default SMS app",
-                    onClick = {
-                        if (defaultSmsApp) {
-                            statusRefresh += 1
-                            trackingStatusMessage = "SMS role status refreshed."
-                        } else {
-                            defaultSmsLauncher.launch(SmsTrackingPermissions.buildDefaultSmsRoleIntent(context))
-                        }
-                    },
-                )
-
-                trackingStatusMessage?.let {
-                    Text(text = it, color = MaterialTheme.colorScheme.primary)
+                    RowSetting("Dark mode", darkMode) { darkMode = it }
+                    PrimaryButton(text = "Save settings", onClick = { viewModel.save(baseUrl, darkMode) })
                 }
             }
+
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(text = "Automatic SMS tracking", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "For real-time fraud detection, the app must be the default SMS handler, and SMS + notification permissions must be granted.",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatusBadge(
+                            text = if (defaultSmsApp) "Default SMS app" else "Not default",
+                            color = if (defaultSmsApp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        )
+                        StatusBadge(
+                            text = if (smsPermissionGranted) "SMS permission" else "SMS permission missing",
+                            color = if (smsPermissionGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        )
+                        StatusBadge(
+                            text = if (notificationPermissionGranted) "Alerts enabled" else "Alerts missing",
+                            color = if (notificationPermissionGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        )
+                    }
+
+                    Text(
+                        text = when {
+                            state.smsMonitoring && trackingReady -> "Automatic tracking is active."
+                            state.smsMonitoring -> "Tracking is enabled, but the device is not currently ready."
+                            else -> "Automatic tracking is disabled."
+                        },
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+                    )
+
+                    PrimaryButton(
+                        text = if (state.smsMonitoring) "Disable tracking" else "Enable tracking",
+                        onClick = {
+                            if (state.smsMonitoring) {
+                                viewModel.setSmsMonitoringEnabled(false)
+                                trackingStatusMessage = "Automatic SMS tracking has been turned off."
+                            } else {
+                                startAutomaticTrackingSetup(
+                                    context = context,
+                                    viewModel = viewModel,
+                                    defaultSmsLauncher = defaultSmsLauncher,
+                                    smsPermissionLauncher = smsPermissionLauncher,
+                                    notificationPermissionLauncher = notificationPermissionLauncher,
+                                    onStatus = { trackingStatusMessage = it },
+                                )
+                            }
+                        },
+                    )
+
+                    PrimaryButton(
+                        text = if (defaultSmsApp) "Refresh SMS status" else "Set as default SMS app",
+                        onClick = {
+                            if (defaultSmsApp) {
+                                statusRefresh += 1
+                                trackingStatusMessage = "SMS role status refreshed."
+                            } else {
+                                defaultSmsLauncher.launch(SmsTrackingPermissions.buildDefaultSmsRoleIntent(context))
+                            }
+                        },
+                    )
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = trackingStatusMessage != null,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+                .widthIn(max = 520.dp),
+            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+        ) {
+            trackingStatusMessage?.let { FeedbackBanner(message = it, tone = statusTone) }
         }
     }
 }

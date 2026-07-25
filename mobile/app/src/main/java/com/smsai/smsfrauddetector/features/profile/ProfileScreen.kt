@@ -1,11 +1,18 @@
 package com.smsai.smsfrauddetector.features.profile
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Logout
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -28,7 +36,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.smsai.smsfrauddetector.core.common.ApiResult
 import com.smsai.smsfrauddetector.core.common.SimpleViewModelFactory
+import com.smsai.smsfrauddetector.core.designsystem.components.BannerTone
 import com.smsai.smsfrauddetector.core.designsystem.components.ErrorStateCard
+import com.smsai.smsfrauddetector.core.designsystem.components.FeedbackBanner
 import com.smsai.smsfrauddetector.core.designsystem.components.PrimaryButton
 import com.smsai.smsfrauddetector.core.designsystem.components.SurfaceCard
 import com.smsai.smsfrauddetector.data.remote.dto.UserDto
@@ -100,6 +110,8 @@ fun ProfileScreen(repository: AppRepository, onLogout: () -> Unit) {
     var lastName by rememberSaveable { mutableStateOf("") }
     var currentPassword by rememberSaveable { mutableStateOf("") }
     var newPassword by rememberSaveable { mutableStateOf("") }
+    var bannerMessage by remember { mutableStateOf<String?>(null) }
+    var bannerTone by remember { mutableStateOf(BannerTone.Info) }
 
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(state.user) {
@@ -109,26 +121,46 @@ fun ProfileScreen(repository: AppRepository, onLogout: () -> Unit) {
             lastName = it.lastName.orEmpty()
         }
     }
+    LaunchedEffect(state.status) {
+        val status = state.status ?: return@LaunchedEffect
+        bannerMessage = status
+        bannerTone = if (status.contains("updated", ignoreCase = true)) BannerTone.Success else BannerTone.Error
+        kotlinx.coroutines.delay(2400)
+        bannerMessage = null
+    }
 
-    Column(modifier = Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(text = "Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        if (state.loading) {
-            CircularProgressIndicator()
-        }
-        state.error?.let { ErrorStateCard(message = it, retryText = "Reload profile", onRetry = { viewModel.load() }) }
-        SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(value = username, onValueChange = { username = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Username") })
-                OutlinedTextField(value = firstName, onValueChange = { firstName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("First name") })
-                OutlinedTextField(value = lastName, onValueChange = { lastName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Last name") })
-                OutlinedTextField(value = currentPassword, onValueChange = { currentPassword = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Current password") })
-                OutlinedTextField(value = newPassword, onValueChange = { newPassword = it }, modifier = Modifier.fillMaxWidth(), label = { Text("New password") })
-                PrimaryButton(text = "Save profile", onClick = { viewModel.save(username, firstName, lastName, currentPassword, newPassword) })
-                state.status?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(text = "Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            if (state.loading) {
+                CircularProgressIndicator()
             }
+            state.error?.let { ErrorStateCard(message = it, retryText = "Reload profile", onRetry = { viewModel.load() }) }
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(value = username, onValueChange = { username = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Username") })
+                    OutlinedTextField(value = firstName, onValueChange = { firstName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("First name") })
+                    OutlinedTextField(value = lastName, onValueChange = { lastName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Last name") })
+                    OutlinedTextField(value = currentPassword, onValueChange = { currentPassword = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Current password") })
+                    OutlinedTextField(value = newPassword, onValueChange = { newPassword = it }, modifier = Modifier.fillMaxWidth(), label = { Text("New password") })
+                    PrimaryButton(text = "Save profile", onClick = { viewModel.save(username, firstName, lastName, currentPassword, newPassword) })
+                }
+            }
+            PrimaryButton(text = "Logout", onClick = {
+                viewModel.logout(onLogout)
+            })
         }
-        PrimaryButton(text = "Logout", onClick = {
-            viewModel.logout(onLogout)
-        })
+
+        AnimatedVisibility(
+            visible = bannerMessage != null,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+                .widthIn(max = 520.dp),
+            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+        ) {
+            bannerMessage?.let { FeedbackBanner(message = it, tone = bannerTone) }
+        }
     }
 }

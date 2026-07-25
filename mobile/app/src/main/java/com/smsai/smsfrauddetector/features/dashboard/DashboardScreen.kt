@@ -2,14 +2,21 @@ package com.smsai.smsfrauddetector.features.dashboard
 
 import android.content.Context
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -25,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -35,7 +43,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.smsai.smsfrauddetector.core.common.ApiResult
 import com.smsai.smsfrauddetector.core.common.SimpleViewModelFactory
+import com.smsai.smsfrauddetector.core.designsystem.components.BannerTone
 import com.smsai.smsfrauddetector.core.designsystem.components.ErrorStateCard
+import com.smsai.smsfrauddetector.core.designsystem.components.FeedbackBanner
 import com.smsai.smsfrauddetector.core.designsystem.components.MetricCard
 import com.smsai.smsfrauddetector.core.designsystem.components.PrimaryButton
 import com.smsai.smsfrauddetector.core.designsystem.components.StatusBadge
@@ -145,82 +155,111 @@ fun DashboardScreen(repository: AppRepository) {
     var notes by rememberSaveable { mutableStateOf("") }
     var force by rememberSaveable { mutableStateOf(false) }
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
+    var bannerMessage by remember { mutableStateOf<String?>(null) }
+    var bannerTone by remember { mutableStateOf(BannerTone.Info) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         selectedUri = uri
     }
 
     LaunchedEffect(Unit) { viewModel.load() }
-
-    Column(modifier = Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(text = "Admin dashboard", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text(text = "Track models, datasets, evaluation results, and retraining actions.")
-        if (state.loading) CircularProgressIndicator()
-        state.error?.let { ErrorStateCard(message = it, retryText = "Reload dashboard", onRetry = { viewModel.load() }) }
-        state.status?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-
-        state.dashboard?.let { dashboard ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                MetricCard("Total", dashboard.totals.totalAnalyses.toString(), "Analyses", modifier = Modifier.weight(1f))
-                MetricCard("Suspicious", dashboard.totals.suspiciousCount.toString(), "Flagged", modifier = Modifier.weight(1f))
-            }
+    LaunchedEffect(state.status) {
+        val status = state.status ?: return@LaunchedEffect
+        bannerMessage = status
+        bannerTone = when {
+            status.contains("failed", ignoreCase = true) ||
+                status.contains("error", ignoreCase = true) ||
+                status.contains("unable", ignoreCase = true) -> BannerTone.Error
+            else -> BannerTone.Success
         }
-        state.evaluation?.let { evaluation ->
-            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatusBadge(text = "Evaluation", color = MaterialTheme.colorScheme.secondary)
-                    Text(text = "${evaluation.modelName} v${evaluation.version}", fontWeight = FontWeight.Bold)
-                    Text(text = "Accuracy ${(evaluation.accuracy * 100).toInt()}% | F1 ${(evaluation.f1Score * 100).toInt()}%")
-                    Text(text = "Train ${evaluation.trainingSamples} | Test ${evaluation.testSamples}")
-                }
-            }
-        }
+        kotlinx.coroutines.delay(2500)
+        bannerMessage = null
+    }
 
-        SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(text = "Import dataset", style = MaterialTheme.typography.titleLarge)
-                OutlinedTextField(value = notes, onValueChange = { notes = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Notes") })
-                PrimaryButton(text = "Pick file", onClick = { picker.launch(arrayOf("text/*", "application/*")) })
-                PrimaryButton(
-                    text = "Upload dataset",
-                    onClick = {
-                        val uri = selectedUri ?: return@PrimaryButton
-                        val part = uriToMultipart(context, uri)
-                        viewModel.importDataset(part, notes)
-                    },
-                    enabled = selectedUri != null,
-                )
-            }
-        }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(text = "Admin dashboard", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(text = "Track models, datasets, evaluation results, and retraining actions.")
+            if (state.loading) CircularProgressIndicator()
+            state.error?.let { ErrorStateCard(message = it, retryText = "Reload dashboard", onRetry = { viewModel.load() }) }
 
-        SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(text = "Retrain model", style = MaterialTheme.typography.titleLarge)
-                OutlinedTextField(value = datasetId, onValueChange = { datasetId = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Dataset ID (optional)") })
-                OutlinedTextField(value = dataPath, onValueChange = { dataPath = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Data path (optional)") })
+            state.dashboard?.let { dashboard ->
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    Text(text = "Force retrain", modifier = Modifier.weight(1f))
-                    androidx.compose.material3.Switch(checked = force, onCheckedChange = { force = it })
+                    MetricCard("Total", dashboard.totals.totalAnalyses.toString(), "Analyses", modifier = Modifier.weight(1f))
+                    MetricCard("Suspicious", dashboard.totals.suspiciousCount.toString(), "Flagged", modifier = Modifier.weight(1f))
                 }
-                PrimaryButton(text = "Start retraining", onClick = {
-                    viewModel.retrain(
-                        datasetId = datasetId.toIntOrNull(),
-                        dataPath = dataPath.ifBlank { null },
-                        force = force,
-                    )
-                })
             }
-        }
-
-        Text(text = "Datasets", style = MaterialTheme.typography.titleLarge)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(state.datasets) { dataset ->
+            state.evaluation?.let { evaluation ->
                 SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(dataset.originalFilename, fontWeight = FontWeight.Bold)
-                        Text("Rows: ${dataset.rowCount}")
-                        Text(dataset.notes.ifBlank { "No notes" })
+                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatusBadge(text = "Evaluation", color = MaterialTheme.colorScheme.secondary)
+                        Text(text = "${evaluation.modelName} v${evaluation.version}", fontWeight = FontWeight.Bold)
+                        Text(text = "Accuracy ${(evaluation.accuracy * 100).toInt()}% | F1 ${(evaluation.f1Score * 100).toInt()}%")
+                        Text(text = "Train ${evaluation.trainingSamples} | Test ${evaluation.testSamples}")
                     }
                 }
+            }
+
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(text = "Import dataset", style = MaterialTheme.typography.titleLarge)
+                    OutlinedTextField(value = notes, onValueChange = { notes = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Notes") })
+                    PrimaryButton(text = "Pick file", onClick = { picker.launch(arrayOf("text/*", "application/*")) })
+                    PrimaryButton(
+                        text = "Upload dataset",
+                        onClick = {
+                            val uri = selectedUri ?: return@PrimaryButton
+                            val part = uriToMultipart(context, uri)
+                            viewModel.importDataset(part, notes)
+                        },
+                        enabled = selectedUri != null,
+                    )
+                }
+            }
+
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(text = "Retrain model", style = MaterialTheme.typography.titleLarge)
+                    OutlinedTextField(value = datasetId, onValueChange = { datasetId = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Dataset ID (optional)") })
+                    OutlinedTextField(value = dataPath, onValueChange = { dataPath = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Data path (optional)") })
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        Text(text = "Force retrain", modifier = Modifier.weight(1f))
+                        androidx.compose.material3.Switch(checked = force, onCheckedChange = { force = it })
+                    }
+                    PrimaryButton(text = "Start retraining", onClick = {
+                        viewModel.retrain(
+                            datasetId = datasetId.toIntOrNull(),
+                            dataPath = dataPath.ifBlank { null },
+                            force = force,
+                        )
+                    })
+                }
+            }
+
+            Text(text = "Datasets", style = MaterialTheme.typography.titleLarge)
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(state.datasets) { dataset ->
+                    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(dataset.originalFilename, fontWeight = FontWeight.Bold)
+                            Text("Rows: ${dataset.rowCount}")
+                            Text(dataset.notes.ifBlank { "No notes" })
+                        }
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = bannerMessage != null,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+                .widthIn(max = 520.dp),
+            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+        ) {
+            bannerMessage?.let {
+                FeedbackBanner(message = it, tone = bannerTone)
             }
         }
     }

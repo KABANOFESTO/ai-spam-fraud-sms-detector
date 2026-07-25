@@ -22,6 +22,17 @@ data class AuthResponseDto(
     val user: UserDto,
 )
 
+data class TokenBundleDto(
+    val refresh: String,
+    val access: String,
+)
+
+data class RegisterResponseDto(
+    val message: String? = null,
+    val tokens: TokenBundleDto,
+    val user: UserDto,
+)
+
 data class LoginRequestDto(
     val email: String,
     val password: String,
