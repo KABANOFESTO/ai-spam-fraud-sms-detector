@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -51,19 +53,54 @@ def normalize_label(label: Any) -> str:
 
 
 def load_training_frame(path: str | Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
-    columns = {column.lower(): column for column in df.columns}
+    if hasattr(path, "read"):
+        raw_text = path.read()
+        if hasattr(path, "seek"):
+            path.seek(0)
+    else:
+        with open(path, "r", encoding="utf-8-sig", newline="") as handle:
+            raw_text = handle.read()
 
-    text_column = columns.get("message") or columns.get("text") or columns.get("sms")
-    label_column = columns.get("label") or columns.get("category") or columns.get("class")
+    if isinstance(raw_text, bytes):
+        raw_text = raw_text.decode("utf-8-sig")
 
-    if not text_column or not label_column:
+    if not raw_text or not raw_text.strip():
+        raise ValueError("Training data is empty.")
+
+    reader = csv.reader(io.StringIO(raw_text))
+    rows = [row for row in reader if row and any(cell.strip() for cell in row)]
+    if len(rows) < 2:
+        raise ValueError("Training data must contain a header and at least one labeled row.")
+
+    header = [column.strip() for column in rows[0]]
+    header_lookup = {column.lower(): index for index, column in enumerate(header)}
+    text_index = next((header_lookup[key] for key in ("message", "text", "sms") if key in header_lookup), None)
+    label_index = next((header_lookup[key] for key in ("label", "category", "class") if key in header_lookup), None)
+
+    if text_index is None or label_index is None:
         raise ValueError("Training data must contain message/text and label/category columns.")
 
-    df = df[[text_column, label_column]].rename(columns={text_column: "message", label_column: "label"})
-    df["message"] = df["message"].astype(str).str.strip()
-    df["label"] = df["label"].apply(normalize_label)
-    df = df[df["message"] != ""].dropna()
+    parsed_rows: list[dict[str, str]] = []
+    for row in rows[1:]:
+        if len(row) == len(header):
+            message = row[text_index].strip()
+            label = row[label_index].strip()
+        elif len(header) == 2 and len(row) > 2:
+            message = ",".join(row[:-1]).strip()
+            label = row[-1].strip()
+        else:
+            raise ValueError(
+                "Training data rows must contain either the declared columns or a message followed by a label."
+            )
+
+        if not message or not label:
+            continue
+
+        parsed_rows.append({"message": message, "label": normalize_label(label)})
+
+    df = pd.DataFrame(parsed_rows, columns=["message", "label"])
+    if df.empty:
+        raise ValueError("Training data does not contain any valid labeled rows.")
     return df.reset_index(drop=True)
 
 
@@ -85,7 +122,6 @@ def build_pipeline() -> Pipeline:
                 LogisticRegression(
                     max_iter=3000,
                     class_weight="balanced",
-                    multi_class="auto",
                 ),
             ),
         ]
