@@ -145,6 +145,10 @@ fun HomeScreen(
                         text = "Message monitoring is available when permissions are granted and the backend is reachable.",
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                     )
+                    StatusBadge(
+                        text = if (state.smsMonitoringEnabled) "Automatic SMS tracking enabled" else "Automatic SMS tracking off",
+                        color = if (state.smsMonitoringEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                    )
                     PrimaryButton(text = "Logout", onClick = { viewModel.logout(onLogout) })
                 }
             }

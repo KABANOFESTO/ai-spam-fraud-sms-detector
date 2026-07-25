@@ -13,3 +13,6 @@ sealed class AppRoute(val route: String) {
     data object Dashboard : AppRoute("dashboard")
 }
 
+object AppLaunchDestination {
+    const val EXTRA_ROUTE = "launch_route"
+}

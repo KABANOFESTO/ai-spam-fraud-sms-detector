@@ -19,6 +19,7 @@ data class HomeUiState(
     val stats: StatsDto? = null,
     val health: HealthDto? = null,
     val activeModel: ModelDto? = null,
+    val smsMonitoringEnabled: Boolean = false,
     val error: String? = null,
 )
 
@@ -52,6 +53,7 @@ class HomeViewModel(
                 is ApiResult.Error -> null
                 else -> null
             }
+            val smsMonitoringEnabled = session.smsMonitoringEnabled
             val error = when {
                 profile == null || stats == null || health == null -> "Some dashboard data could not be loaded."
                 else -> null
@@ -62,6 +64,7 @@ class HomeViewModel(
                 stats = stats,
                 health = health,
                 activeModel = activeModel,
+                smsMonitoringEnabled = smsMonitoringEnabled,
                 error = error,
             )
         }

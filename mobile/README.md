@@ -30,14 +30,14 @@ You can change the backend base URL in the app settings screen.
 
 ## Important Permissions
 
-The app requests:
+For automatic SMS tracking, the app requests:
 
 - `INTERNET`
 - `RECEIVE_SMS`
-- `READ_SMS`
 - `POST_NOTIFICATIONS`
 
-SMS permissions are needed for incoming-message monitoring.
+Automatic tracking only works after the app is set as the default SMS handler on the device. That is the supported flow for real-time incoming-message monitoring.
+If the user keeps the app in normal mode, SMS analysis still works by manually entering or sharing a message into the app.
 
 ## Main Screens
 

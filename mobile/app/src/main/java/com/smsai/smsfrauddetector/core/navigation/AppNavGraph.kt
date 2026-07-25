@@ -2,9 +2,11 @@ package com.smsai.smsfrauddetector.core.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -25,8 +27,28 @@ import com.smsai.smsfrauddetector.features.splash.SplashViewModel
 @Composable
 fun AppNavGraph(
     repository: AppRepository,
+    launchRoute: String? = null,
+    onLaunchRouteConsumed: (() -> Unit)? = null,
     navController: NavHostController = rememberNavController(),
 ) {
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = currentBackStackEntry?.destination?.route
+
+    LaunchedEffect(launchRoute, currentRoute) {
+        val targetRoute = launchRoute ?: return@LaunchedEffect
+        if (currentRoute == AppRoute.Splash.route) return@LaunchedEffect
+        if (!repository.isAuthenticated()) return@LaunchedEffect
+        if (currentRoute == targetRoute) {
+            onLaunchRouteConsumed?.invoke()
+            return@LaunchedEffect
+        }
+        navController.navigate(targetRoute) {
+            launchSingleTop = true
+            popUpTo(AppRoute.Home.route) { inclusive = false }
+        }
+        onLaunchRouteConsumed?.invoke()
+    }
+
     NavHost(
         navController = navController,
         startDestination = AppRoute.Splash.route,
@@ -38,10 +60,14 @@ fun AppNavGraph(
             val state = splashViewModel.state.collectAsStateWithLifecycle().value
             LaunchedEffect(state.loading, state.authenticated) {
                 if (!state.loading) {
+                    val targetRoute = launchRoute?.takeIf { state.authenticated }
                     navController.navigate(
-                        if (state.authenticated) AppRoute.Home.route else AppRoute.Login.route,
+                        targetRoute ?: if (state.authenticated) AppRoute.Home.route else AppRoute.Login.route,
                     ) {
                         popUpTo(AppRoute.Splash.route) { inclusive = true }
+                    }
+                    if (targetRoute != null) {
+                        onLaunchRouteConsumed?.invoke()
                     }
                 }
             }
@@ -60,8 +86,11 @@ fun AppNavGraph(
                 mode = AuthMode.Login,
                 repository = repository,
                 onAuthenticated = {
-                    navController.navigate(AppRoute.Home.route) {
+                    navController.navigate(launchRoute ?: AppRoute.Home.route) {
                         popUpTo(AppRoute.Login.route) { inclusive = true }
+                    }
+                    if (launchRoute != null) {
+                        onLaunchRouteConsumed?.invoke()
                     }
                 },
                 onSwitchToLogin = {},
@@ -75,8 +104,11 @@ fun AppNavGraph(
                 mode = AuthMode.Register,
                 repository = repository,
                 onAuthenticated = {
-                    navController.navigate(AppRoute.Home.route) {
+                    navController.navigate(launchRoute ?: AppRoute.Home.route) {
                         popUpTo(AppRoute.Register.route) { inclusive = true }
+                    }
+                    if (launchRoute != null) {
+                        onLaunchRouteConsumed?.invoke()
                     }
                 },
                 onSwitchToLogin = {
