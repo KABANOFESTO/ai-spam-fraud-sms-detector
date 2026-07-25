@@ -12,6 +12,9 @@ import com.smsai.smsfrauddetector.MainActivity
 import com.smsai.smsfrauddetector.SmsFraudApplication
 import com.smsai.smsfrauddetector.core.common.ApiResult
 import com.smsai.smsfrauddetector.core.notification.NotificationHelper
+import com.smsai.smsfrauddetector.core.navigation.AppLaunchDestination
+import com.smsai.smsfrauddetector.core.navigation.AppRoute
+import com.smsai.smsfrauddetector.core.permissions.SmsTrackingPermissions
 
 class SmsAnalysisWorker(
     appContext: Context,
@@ -23,7 +26,7 @@ class SmsAnalysisWorker(
 
         val app = applicationContext as SmsFraudApplication
         val repository = app.container.repository
-        if (!repository.currentSmsMonitoring()) {
+        if (!repository.currentSmsMonitoring() || !SmsTrackingPermissions.canTrackAutomatically(applicationContext)) {
             return Result.success()
         }
 
@@ -32,14 +35,30 @@ class SmsAnalysisWorker(
                 if (result.data.isSuspicious) {
                     postSuspiciousNotification(
                         title = "Suspicious SMS detected",
-                        text = result.data.explanation ?: "The message was classified as ${result.data.prediction}.",
+                        text = buildNotificationText(
+                            prediction = result.data.prediction,
+                            confidence = result.data.confidence,
+                            explanation = result.data.explanation,
+                        ),
                     )
                 }
                 Result.success()
             }
-            is ApiResult.Error -> Result.retry()
+            is ApiResult.Error -> {
+                if (result.code == null || result.code >= 500) {
+                    Result.retry()
+                } else {
+                    Result.success()
+                }
+            }
             else -> Result.success()
         }
+    }
+
+    private fun buildNotificationText(prediction: String, confidence: Double, explanation: String?): String {
+        val summary = "Classified as $prediction with ${confidence.toInt()}% confidence."
+        val detail = explanation?.takeIf { it.isNotBlank() } ?: "Open the app to review the saved analysis history."
+        return "$summary $detail"
     }
 
     private fun postSuspiciousNotification(title: String, text: String) {
@@ -47,6 +66,7 @@ class SmsAnalysisWorker(
 
         val launchIntent = Intent(applicationContext, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(AppLaunchDestination.EXTRA_ROUTE, AppRoute.History.route)
         }
         val pendingIntent = PendingIntent.getActivity(
             applicationContext,
