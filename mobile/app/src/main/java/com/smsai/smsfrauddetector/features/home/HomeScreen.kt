@@ -75,7 +75,6 @@ fun HomeScreen(
             health?.status?.equals("ok", true) == true -> "Backend connected. Model status is loading."
             else -> "Backend is currently offline."
         }
-
         bannerTone = when {
             state.error != null && health == null -> BannerTone.Error
             health?.status?.equals("ok", true) == true && health.modelReady -> BannerTone.Success
@@ -83,7 +82,6 @@ fun HomeScreen(
             else -> BannerTone.Error
         }
     }
-
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
