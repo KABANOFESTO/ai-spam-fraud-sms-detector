@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,6 +23,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -43,6 +49,7 @@ data class HistoryUiState(
     val loading: Boolean = true,
     val items: List<AnalysisResultDto> = emptyList(),
     val error: String? = null,
+    val status: String? = null,
 )
 
 class HistoryViewModel(
@@ -61,6 +68,19 @@ class HistoryViewModel(
             }
         }
     }
+
+    fun delete(itemId: Int) {
+        viewModelScope.launch {
+            when (val result = repository.deleteHistory(itemId)) {
+                is ApiResult.Success -> {
+                    _state.value = _state.value.copy(status = result.data)
+                    load()
+                }
+                is ApiResult.Error -> _state.value = _state.value.copy(status = result.message)
+                else -> Unit
+            }
+        }
+    }
 }
 
 @Composable
@@ -69,6 +89,7 @@ fun HistoryScreen(repository: AppRepository) {
         factory = remember(repository) { SimpleViewModelFactory { HistoryViewModel(repository) } },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var pendingDeleteItem by remember { mutableStateOf<AnalysisResultDto?>(null) }
     LaunchedEffect(Unit) { viewModel.load() }
 
     Column(
@@ -123,11 +144,128 @@ fun HistoryScreen(repository: AppRepository) {
                                 Text(text = "Confidence ${(item.confidence * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                             }
                             Text(text = item.message, maxLines = 3)
-                            Text(text = item.analyzedAt ?: "Recently analyzed", style = MaterialTheme.typography.labelMedium)
+                            val display = formatHumanDateTime(item.analyzedAt)
+                            val subtitle = formatHumanTimeSubtitle(item.analyzedAt)
+                            Text(
+                                text = display ?: "Recently analyzed",
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            Text(
+                                text = subtitle ?: "Saved by the backend automatically",
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            Text(
+                                text = "Delete removes this record from your local history view.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            )
+                            TextButton(onClick = { pendingDeleteItem = item }) {
+                                Text(
+                                    text = "Delete history",
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
+
+    pendingDeleteItem?.let { item ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteItem = null },
+            title = { Text(text = "Delete history item?") },
+            text = {
+                Text(text = "This will permanently remove this analysis record and cannot be undone.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDeleteItem = null
+                        viewModel.delete(item.id)
+                    },
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteItem = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+}
+
+private fun formatHumanDateTime(rawValue: String?): String? {
+    val raw = rawValue?.trim().orEmpty()
+    if (raw.isBlank()) return null
+
+    val patterns = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+        "yyyy-MM-dd'T'HH:mm:ssX",
+        "yyyy-MM-dd HH:mm:ss",
+    )
+
+    for (pattern in patterns) {
+        val parsed = runCatching {
+            SimpleDateFormat(pattern, Locale.getDefault()).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }.parse(raw)
+        }.getOrNull()
+        if (parsed != null) {
+            return SimpleDateFormat("MMM d, yyyy - h:mm a", Locale.getDefault()).format(Date(parsed.time))
+        }
+    }
+
+    return raw
+}
+
+private fun formatHumanTimeSubtitle(rawValue: String?): String? {
+    val parsed = parseDate(rawValue) ?: return null
+    val now = java.util.Calendar.getInstance()
+    val whenCal = java.util.Calendar.getInstance().apply { time = parsed }
+    val timeText = SimpleDateFormat("h:mm a", Locale.getDefault()).format(parsed)
+
+    return when {
+        isSameDay(now, whenCal) -> "Today, $timeText"
+        isYesterday(now, whenCal) -> "Yesterday, $timeText"
+        else -> timeText
+    }
+}
+
+private fun parseDate(rawValue: String?): Date? {
+    val raw = rawValue?.trim().orEmpty()
+    if (raw.isBlank()) return null
+
+    val patterns = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+        "yyyy-MM-dd'T'HH:mm:ssX",
+        "yyyy-MM-dd HH:mm:ss",
+    )
+
+    for (pattern in patterns) {
+        val parsed = runCatching {
+            SimpleDateFormat(pattern, Locale.getDefault()).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }.parse(raw)
+        }.getOrNull()
+        if (parsed != null) return parsed
+    }
+
+    return null
+}
+
+private fun isSameDay(first: java.util.Calendar, second: java.util.Calendar): Boolean {
+    return first.get(java.util.Calendar.YEAR) == second.get(java.util.Calendar.YEAR) &&
+        first.get(java.util.Calendar.DAY_OF_YEAR) == second.get(java.util.Calendar.DAY_OF_YEAR)
+}
+
+private fun isYesterday(today: java.util.Calendar, candidate: java.util.Calendar): Boolean {
+    val yesterday = (today.clone() as java.util.Calendar).apply {
+        add(java.util.Calendar.DAY_OF_YEAR, -1)
+    }
+    return isSameDay(yesterday, candidate)
 }

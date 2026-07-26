@@ -21,11 +21,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Upload
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -165,6 +167,19 @@ class DashboardViewModel(private val repository: AppRepository) : ViewModel() {
             }
         }
     }
+
+    fun deleteDataset(datasetId: Int) {
+        viewModelScope.launch {
+            when (val result = repository.deleteDataset(datasetId)) {
+                is ApiResult.Success -> {
+                    _state.value = _state.value.copy(status = result.data)
+                    load()
+                }
+                is ApiResult.Error -> _state.value = _state.value.copy(status = result.message)
+                else -> Unit
+            }
+        }
+    }
 }
 
 private fun ActiveModelDto.toModelDto(): ModelDto {
@@ -202,6 +217,7 @@ fun DashboardScreen(
     var notes by rememberSaveable { mutableStateOf("") }
     var force by rememberSaveable { mutableStateOf(false) }
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingDeleteDataset by remember { mutableStateOf<DatasetDto?>(null) }
     var bannerMessage by remember { mutableStateOf<String?>(null) }
     var bannerTone by remember { mutableStateOf(BannerTone.Info) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -375,14 +391,17 @@ fun DashboardScreen(
                         subtitle = "Upload a labeled CSV to start training the first production model.",
                     )
                 }
-                if (state.datasets.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        state.datasets.forEach { dataset ->
-                            PolishedDatasetCard(dataset = dataset)
-                        }
+            if (state.datasets.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    state.datasets.forEach { dataset ->
+                        PolishedDatasetCard(
+                            dataset = dataset,
+                                onDelete = { pendingDeleteDataset = dataset },
+                        )
                     }
                 }
-            } else {
+            }
+        } else {
                 SurfaceCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(text = "What you can do", style = MaterialTheme.typography.titleLarge)
@@ -391,6 +410,33 @@ fun DashboardScreen(
                     }
                 }
             }
+        }
+
+        pendingDeleteDataset?.let { dataset ->
+            AlertDialog(
+                onDismissRequest = { pendingDeleteDataset = null },
+                title = { Text(text = "Delete dataset?") },
+                text = {
+                    Text(
+                        text = "This will permanently remove ${dataset.originalFilename} and its uploaded file.",
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            pendingDeleteDataset = null
+                            viewModel.deleteDataset(dataset.id)
+                        },
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingDeleteDataset = null }) {
+                        Text("Cancel")
+                    }
+                },
+            )
         }
 
         AnimatedVisibility(
@@ -502,7 +548,10 @@ private fun PolishedModelCard(model: ModelDto) {
 }
 
 @Composable
-private fun PolishedDatasetCard(dataset: DatasetDto) {
+private fun PolishedDatasetCard(
+    dataset: DatasetDto,
+    onDelete: () -> Unit,
+) {
     SurfaceCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
@@ -519,6 +568,14 @@ private fun PolishedDatasetCard(dataset: DatasetDto) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 StatusBadge(text = "Imported dataset", color = MaterialTheme.colorScheme.secondary)
                 StatusBadge(text = "Training ready", color = MaterialTheme.colorScheme.secondary)
+            }
+
+            TextButton(onClick = onDelete) {
+                Text(
+                    text = "Delete dataset",
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }

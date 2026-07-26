@@ -62,7 +62,7 @@ interface ApiService {
     suspend fun me(): UserDto
 
     @GET("api/auth/users/")
-    suspend fun users(): List<UserDto>
+    suspend fun users(): ResponseBody
 
     @POST("api/auth/admin/users/create/")
     suspend fun adminCreateUser(@Body request: AdminUserCreateRequestDto): AdminUserCreateResponseDto
@@ -96,6 +96,9 @@ interface ApiService {
         @QueryMap(encoded = true) filters: Map<String, String> = emptyMap(),
     ): PaginatedResponse<AnalysisResultDto>
 
+    @DELETE("api/analysis/history/{pk}/")
+    suspend fun deleteHistory(@Path("pk") analysisId: Int): Map<String, String>
+
     @GET("api/analysis/stats/")
     suspend fun stats(): StatsDto
 
@@ -126,6 +129,9 @@ interface ApiService {
         @Query("page") page: Int? = null,
         @Query("page_size") pageSize: Int? = null,
     ): PaginatedResponse<DatasetDto>
+
+    @DELETE("api/analysis/admin/datasets/{pk}/delete/")
+    suspend fun deleteDataset(@Path("pk") datasetId: Int): Map<String, String>
 
     @GET("api/analysis/admin/evaluation/")
     suspend fun evaluation(@Query("model_id") modelId: Int? = null): EvaluationReportDto

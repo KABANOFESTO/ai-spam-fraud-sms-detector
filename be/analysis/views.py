@@ -3,6 +3,7 @@ from pathlib import Path
 from datetime import timedelta
 
 from django.conf import settings
+from django.shortcuts import get_object_or_404
 from django.db.models import Avg, Count, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
@@ -161,7 +162,7 @@ class AnalysisHistoryView(generics.ListAPIView):
         return queryset
 
 
-class AnalysisDetailView(generics.RetrieveAPIView):
+class AnalysisDetailView(generics.RetrieveDestroyAPIView):
     serializer_class = SMSAnalysisSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdmin]
 
@@ -170,6 +171,26 @@ class AnalysisDetailView(generics.RetrieveAPIView):
         if getattr(self.request.user, "role", None) != "Admin":
             queryset = queryset.filter(user=self.request.user)
         return queryset
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        analysis_data = SMSAnalysisSerializer(instance).data
+        log_action(
+            request,
+            "ANALYSIS_DELETE",
+            target_user=instance.user,
+            additional_data={
+                "analysis_id": instance.id,
+                "prediction": instance.prediction,
+                "confidence": float(instance.confidence),
+                "deleted_by": request.user.email,
+            },
+        )
+        self.perform_destroy(instance)
+        return Response(
+            {"message": "Analysis history deleted successfully.", "analysis": analysis_data},
+            status=status.HTTP_200_OK,
+        )
 
 
 class AnalysisStatsView(APIView):
@@ -459,6 +480,34 @@ class DatasetListView(generics.ListAPIView):
     serializer_class = TrainingDatasetSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdmin]
     queryset = TrainingDataset.objects.all().select_related("imported_by")
+
+
+class DatasetDeleteView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+
+    def delete(self, request, pk):
+        dataset = get_object_or_404(TrainingDataset, pk=pk)
+        original_filename = dataset.original_filename
+        stored_file = dataset.stored_file
+        dataset.delete()
+
+        try:
+            if stored_file:
+                stored_file.delete(save=False)
+        except Exception:
+            pass
+
+        log_action(
+            request,
+            "DATASET_DELETE",
+            target_user=request.user,
+            additional_data={
+                "dataset_id": pk,
+                "original_filename": original_filename,
+            },
+        )
+
+        return Response({"message": "Dataset deleted successfully."}, status=status.HTTP_200_OK)
 
 
 class EvaluationReportView(APIView):

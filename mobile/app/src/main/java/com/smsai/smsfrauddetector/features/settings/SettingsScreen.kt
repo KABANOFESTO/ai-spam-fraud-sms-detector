@@ -155,7 +155,7 @@ fun SettingsScreen(repository: AppRepository) {
                 notificationPermissionLauncher = notificationPermissionLauncher,
             )
         } else {
-            trackingStatusMessage = "This app must be the default SMS handler to enable automatic tracking."
+            trackingStatusMessage = "If prompted, choose this app as the default SMS handler, then come back here."
         }
     }
 

@@ -199,6 +199,10 @@ class AppRepository(
         api().history(page = page, pageSize = pageSize, filters = emptyMap())
     }
 
+    suspend fun deleteHistory(analysisId: Int): ApiResult<String> = call {
+        api().deleteHistory(analysisId).getOrDefault("message", "Analysis history deleted successfully.")
+    }
+
     suspend fun stats(): ApiResult<StatsDto> = call { api().stats() }
 
     suspend fun dashboard(): ApiResult<DashboardResponseDto> = call { api().dashboard() }
@@ -248,6 +252,10 @@ class AppRepository(
         api().importDataset(file = file, fields = fields)
     }
 
+    suspend fun deleteDataset(datasetId: Int): ApiResult<String> = call {
+        api().deleteDataset(datasetId).getOrDefault("message", "Dataset deleted successfully.")
+    }
+
     suspend fun updateBaseUrl(baseUrl: String) {
         sessionStore.updateBaseUrl(baseUrl)
     }
@@ -264,7 +272,9 @@ class AppRepository(
     suspend fun currentDarkMode(): Boolean = sessionStore.darkMode()
     suspend fun currentSmsMonitoring(): Boolean = sessionStore.smsMonitoringEnabled()
 
-    suspend fun users(): ApiResult<List<UserDto>> = call { api().users() }
+    suspend fun users(): ApiResult<List<UserDto>> = call {
+        parseUsersResponse(api().users())
+    }
 
     suspend fun adminCreateUser(
         username: String,
@@ -312,6 +322,35 @@ class AppRepository(
 
     suspend fun adminDeleteUser(userId: Int): ApiResult<String> = call {
         api().adminDeleteUser(userId).getOrDefault("message", "User deleted successfully.")
+    }
+
+    private fun parseUsersResponse(body: ResponseBody): List<UserDto> {
+        return try {
+            val raw = body.string().trim()
+            if (raw.isBlank()) return emptyList()
+
+            val element = JsonParser.parseString(raw)
+            val listType = object : TypeToken<List<UserDto>>() {}.type
+
+            when {
+                element.isJsonArray -> gson.fromJson(element, listType)
+                element.isJsonObject -> {
+                    val objectValue = element.asJsonObject
+                    when {
+                        objectValue.has("results") && objectValue["results"].isJsonArray ->
+                            gson.fromJson(objectValue["results"], listType)
+                        objectValue.has("users") && objectValue["users"].isJsonArray ->
+                            gson.fromJson(objectValue["users"], listType)
+                        objectValue.has("id") ->
+                            listOf(gson.fromJson(element, UserDto::class.java))
+                        else -> emptyList()
+                    }
+                }
+                else -> emptyList()
+            }
+        } catch (_: Throwable) {
+            emptyList()
+        }
     }
 
     private fun parseActiveModelsResponse(body: ResponseBody): List<ModelDto> {
