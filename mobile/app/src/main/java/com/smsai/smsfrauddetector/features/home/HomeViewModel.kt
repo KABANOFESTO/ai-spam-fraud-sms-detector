@@ -55,7 +55,8 @@ class HomeViewModel(
             }
             val smsMonitoringEnabled = session.smsMonitoringEnabled
             val error = when {
-                profile == null || stats == null || health == null -> "Some dashboard data could not be loaded."
+                health == null -> "Backend status could not be verified."
+                profile == null && stats == null -> "Some dashboard data could not be loaded."
                 else -> null
             }
             _state.value = HomeUiState(

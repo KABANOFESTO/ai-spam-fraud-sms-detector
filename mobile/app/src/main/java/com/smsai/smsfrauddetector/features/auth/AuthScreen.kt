@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedVisibility
@@ -36,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,10 +45,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.smsai.smsfrauddetector.core.common.SimpleViewModelFactory
+import com.smsai.smsfrauddetector.core.common.ApiResult
 import com.smsai.smsfrauddetector.core.designsystem.components.ErrorStateCard
 import com.smsai.smsfrauddetector.core.designsystem.components.PrimaryButton
 import com.smsai.smsfrauddetector.core.designsystem.components.SurfaceCard
@@ -54,12 +58,14 @@ import com.smsai.smsfrauddetector.core.designsystem.theme.SmsGradientBackground
 import com.smsai.smsfrauddetector.data.remote.dto.UserDto
 import com.smsai.smsfrauddetector.data.repository.AppRepository
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 enum class AuthMode { Login, Register }
 
 private sealed interface AuthBanner {
     data class Success(val message: String) : AuthBanner
     data class Error(val message: String) : AuthBanner
+    data class Info(val message: String) : AuthBanner
 }
 
 @Composable
@@ -77,6 +83,7 @@ fun AuthScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
     var username by rememberSaveable { mutableStateOf("") }
     var firstName by rememberSaveable { mutableStateOf("") }
     var lastName by rememberSaveable { mutableStateOf("") }
@@ -107,6 +114,13 @@ fun AuthScreen(
         }
     }
 
+    LaunchedEffect(authBanner) {
+        if (authBanner is AuthBanner.Info) {
+            delay(2600)
+            authBanner = null
+        }
+    }
+
     SmsGradientBackground(modifier = modifier) {
         Box(modifier = Modifier.fillMaxSize()) {
             Scaffold(
@@ -126,11 +140,15 @@ fun AuthScreen(
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
                     )
                     Text(
                         text = "Secure every message before it is trusted.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
                     )
 
                     Spacer(modifier = Modifier.height(22.dp))
@@ -200,6 +218,31 @@ fun AuthScreen(
                                 singleLine = true,
                             )
 
+                            if (mode == AuthMode.Login) {
+                                Text(
+                                    text = "Forgot password?",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (email.isBlank()) {
+                                                authBanner = AuthBanner.Error("Enter your email address first.")
+                                                return@clickable
+                                            }
+                                            scope.launch {
+                                                when (val result = repository.requestPasswordReset(email)) {
+                                                    is ApiResult.Success -> authBanner = AuthBanner.Info(result.data)
+                                                    is ApiResult.Error -> authBanner = AuthBanner.Error(result.message)
+                                                    else -> Unit
+                                                }
+                                            }
+                                        },
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+
                             state.takeIf { it is com.smsai.smsfrauddetector.core.common.UiState.Error }
                                 ?.let {
                                     ErrorStateCard(
@@ -264,6 +307,12 @@ fun AuthScreen(
                         icon = Icons.Rounded.Error,
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    is AuthBanner.Info -> PremiumAuthSnackbar(
+                        message = banner.message,
+                        icon = Icons.Rounded.Email,
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
                     null -> Unit
                 }

@@ -312,6 +312,7 @@ class ForgotPasswordView(APIView):
         token = default_token_generator.make_token(user)
         frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
         reset_link = f"{frontend_url}/reset-password/{uid}/{token}"
+        app_link = f"smsfrauddetector://reset-password/{uid}/{token}"
 
         try:
             send_mail(
@@ -320,6 +321,8 @@ class ForgotPasswordView(APIView):
                     f"Hello {user.first_name or user.username},\n\n"
                     f"You requested a password reset. Click the link below to reset your password:\n"
                     f"{reset_link}\n\n"
+                    f"If you are using the Android app, you can also open this link:\n"
+                    f"{app_link}\n\n"
                     f"This link will expire in 24 hours.\n\n"
                     f"If you didn't request this, please ignore this email."
                 ),

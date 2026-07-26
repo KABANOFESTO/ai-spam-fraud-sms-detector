@@ -46,6 +46,17 @@ data class RegisterRequestDto(
     @SerializedName("last_name") val lastName: String? = null,
 )
 
+data class ForgotPasswordRequestDto(
+    val email: String,
+)
+
+data class ResetPasswordRequestDto(
+    val uid: String,
+    val token: String,
+    @SerializedName("new_password") val newPassword: String,
+    @SerializedName("confirm_password") val confirmPassword: String? = null,
+)
+
 data class LogoutRequestDto(
     val refresh: String,
 )
@@ -179,6 +190,33 @@ data class EvaluationReportDto(
     @SerializedName("confusion_matrix") val confusionMatrix: List<List<Int>>,
     val labels: List<String>,
     @SerializedName("classification_report") val classificationReport: Map<String, Any>,
+)
+
+data class MessageResponseDto(
+    val message: String,
+)
+
+data class AdminUserCreateRequestDto(
+    val username: String,
+    val email: String,
+    val role: String,
+    @SerializedName("first_name") val firstName: String? = null,
+    @SerializedName("last_name") val lastName: String? = null,
+    val status: String = "Active",
+)
+
+data class AdminUserCreateResponseDto(
+    val message: String? = null,
+    @SerializedName("user_id") val userId: Int? = null,
+    val email: String? = null,
+    @SerializedName("temporary_password") val temporaryPassword: String? = null,
+)
+
+data class AdminUserMutationResponseDto(
+    val message: String? = null,
+    val user: UserDto? = null,
+    @SerializedName("previous_status") val previousStatus: String? = null,
+    @SerializedName("new_status") val newStatus: String? = null,
 )
 
 data class ModelDto(

@@ -8,6 +8,9 @@ import com.smsai.smsfrauddetector.core.network.ApiClient
 import com.smsai.smsfrauddetector.data.local.datastore.SessionSnapshot
 import com.smsai.smsfrauddetector.data.local.datastore.SessionStore
 import com.smsai.smsfrauddetector.data.remote.dto.ActiveModelDto
+import com.smsai.smsfrauddetector.data.remote.dto.AdminUserCreateRequestDto
+import com.smsai.smsfrauddetector.data.remote.dto.AdminUserCreateResponseDto
+import com.smsai.smsfrauddetector.data.remote.dto.AdminUserMutationResponseDto
 import com.smsai.smsfrauddetector.data.remote.dto.AnalysisResultDto
 import com.smsai.smsfrauddetector.data.remote.dto.AnalyzeRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.AuthResponseDto
@@ -16,12 +19,14 @@ import com.smsai.smsfrauddetector.data.remote.dto.DashboardResponseDto
 import com.smsai.smsfrauddetector.data.remote.dto.EvaluationReportDto
 import com.smsai.smsfrauddetector.data.remote.dto.FraudReportDto
 import com.smsai.smsfrauddetector.data.remote.dto.HealthDto
+import com.smsai.smsfrauddetector.data.remote.dto.ForgotPasswordRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.LoginRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.LogoutRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.ModelDto
 import com.smsai.smsfrauddetector.data.remote.dto.PaginatedResponse
 import com.smsai.smsfrauddetector.data.remote.dto.ProfileUpdateResponseDto
 import com.smsai.smsfrauddetector.data.remote.dto.RegisterRequestDto
+import com.smsai.smsfrauddetector.data.remote.dto.ResetPasswordRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.ReportRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.StatsDto
 import com.smsai.smsfrauddetector.data.remote.dto.UserDto
@@ -86,6 +91,27 @@ class AppRepository(
         val response = api().login(LoginRequestDto(email = email.trim(), password = password))
         sessionStore.saveSession(response)
         UserSession(response.access, response.refresh, response.user)
+    }
+
+    suspend fun requestPasswordReset(email: String): ApiResult<String> = call {
+        api().forgotPassword(ForgotPasswordRequestDto(email = email.trim()))
+            .getOrDefault("message", "If an account with this email exists, a password reset link has been sent.")
+    }
+
+    suspend fun resetPassword(
+        uid: String,
+        token: String,
+        newPassword: String,
+        confirmPassword: String,
+    ): ApiResult<String> = call {
+        api().resetPassword(
+            ResetPasswordRequestDto(
+                uid = uid.trim(),
+                token = token.trim(),
+                newPassword = newPassword,
+                confirmPassword = confirmPassword,
+            ),
+        ).getOrDefault("message", "Password has been reset successfully.")
     }
 
     suspend fun register(
@@ -224,4 +250,54 @@ class AppRepository(
     suspend fun currentBaseUrl(): String = sessionStore.baseUrl(BuildConfig.DEFAULT_BASE_URL)
     suspend fun currentDarkMode(): Boolean = sessionStore.darkMode()
     suspend fun currentSmsMonitoring(): Boolean = sessionStore.smsMonitoringEnabled()
+
+    suspend fun users(): ApiResult<List<UserDto>> = call { api().users() }
+
+    suspend fun adminCreateUser(
+        username: String,
+        email: String,
+        role: String,
+        firstName: String = "",
+        lastName: String = "",
+        status: String = "Active",
+    ): ApiResult<AdminUserCreateResponseDto> = call {
+        api().adminCreateUser(
+            AdminUserCreateRequestDto(
+                username = username.trim(),
+                email = email.trim(),
+                role = role,
+                firstName = firstName.trim().ifBlank { null },
+                lastName = lastName.trim().ifBlank { null },
+                status = status,
+            ),
+        )
+    }
+
+    suspend fun adminUpdateUser(
+        userId: Int,
+        username: String,
+        firstName: String,
+        lastName: String,
+        role: String,
+        status: String,
+    ): ApiResult<AdminUserMutationResponseDto> = call {
+        api().adminUpdateUser(
+            userId = userId,
+            request = mapOf(
+                "username" to username.trim(),
+                "first_name" to firstName.trim(),
+                "last_name" to lastName.trim(),
+                "role" to role.trim(),
+                "status" to status.trim(),
+            ),
+        )
+    }
+
+    suspend fun adminToggleUser(userId: Int): ApiResult<AdminUserMutationResponseDto> = call {
+        api().adminToggleUser(userId)
+    }
+
+    suspend fun adminDeleteUser(userId: Int): ApiResult<String> = call {
+        api().adminDeleteUser(userId).getOrDefault("message", "User deleted successfully.")
+    }
 }
