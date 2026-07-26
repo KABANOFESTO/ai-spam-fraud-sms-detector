@@ -11,7 +11,15 @@ import androidx.core.content.ContextCompat
 
 object SmsTrackingPermissions {
     fun isDefaultSmsApp(context: Context): Boolean {
-        return Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
+        val legacyDefault = Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
+        if (legacyDefault) return true
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = context.getSystemService(RoleManager::class.java)
+            roleManager?.isRoleHeld(RoleManager.ROLE_SMS) == true
+        } else {
+            false
+        }
     }
 
     fun isSmsPermissionGranted(context: Context): Boolean {

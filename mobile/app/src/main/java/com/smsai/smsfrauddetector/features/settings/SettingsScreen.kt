@@ -263,10 +263,11 @@ fun SettingsScreen(repository: AppRepository) {
                     SurfaceCard(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                StatusBadge(text = "Setup checklist", color = MaterialTheme.colorScheme.secondary)
+                                StatusBadge(text = "Setup checklist", color = MaterialTheme.colorScheme.secondary, compact = true)
                                 StatusBadge(
                                     text = if (trackingReady) "Ready" else "Needs setup",
                                     color = if (trackingReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                                    compact = true,
                                 )
                             }
                             Text(
@@ -345,18 +346,21 @@ fun SettingsScreen(repository: AppRepository) {
                         )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatusBadge(
                             text = if (defaultSmsApp) "Default SMS app" else "Not default",
                             color = if (defaultSmsApp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            compact = true,
                         )
                         StatusBadge(
                             text = if (smsPermissionGranted) "SMS permission" else "SMS permission missing",
                             color = if (smsPermissionGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            compact = true,
                         )
                         StatusBadge(
                             text = if (notificationPermissionGranted) "Alerts enabled" else "Alerts missing",
                             color = if (notificationPermissionGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            compact = true,
                         )
                     }
 
@@ -518,6 +522,7 @@ private fun TrackingChecklistItem(
                     active -> MaterialTheme.colorScheme.secondary
                     else -> MaterialTheme.colorScheme.tertiary
                 },
+                compact = true,
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -541,6 +546,7 @@ private fun TrackingChecklistItem(
                     active -> MaterialTheme.colorScheme.secondary
                     else -> MaterialTheme.colorScheme.error
                 },
+                compact = true,
             )
         }
     }
