@@ -66,11 +66,11 @@ private data class BottomNavItem(
 
 private val bottomNavItems = listOf(
     BottomNavItem(AppRoute.Home.route, "Home", Icons.Rounded.Home),
-    BottomNavItem(AppRoute.Analyze.route, "Analyze", Icons.Rounded.EditNote),
-    BottomNavItem(AppRoute.History.route, "History", Icons.Rounded.History),
-    BottomNavItem(AppRoute.Dashboard.route, "Dashboard", Icons.Rounded.Dashboard),
+    BottomNavItem(AppRoute.Analyze.route, "Scan", Icons.Rounded.EditNote),
+    BottomNavItem(AppRoute.History.route, "Log", Icons.Rounded.History),
+    BottomNavItem(AppRoute.Dashboard.route, "Dash", Icons.Rounded.Dashboard),
     BottomNavItem(AppRoute.AdminUsers.route, "Users", Icons.Rounded.People),
-    BottomNavItem(AppRoute.Settings.route, "Settings", Icons.Rounded.Settings),
+    BottomNavItem(AppRoute.Settings.route, "Set", Icons.Rounded.Settings),
 )
 
 @Composable
@@ -136,7 +136,8 @@ fun AppNavGraph(
                                 }
                             },
                             icon = { Icon(imageVector = item.icon, contentDescription = item.label) },
-                            label = { Text(item.label) },
+                            label = {},
+                            alwaysShowLabel = false,
                         )
                     }
                 }

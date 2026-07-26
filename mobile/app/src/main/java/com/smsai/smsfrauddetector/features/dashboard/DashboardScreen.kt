@@ -17,11 +17,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -258,38 +257,36 @@ fun DashboardScreen(
             }
 
             if (isAdmin && state.dashboard?.activeModel == null && !state.loading) {
-                ErrorStateCard(
-                    message = "No active model is available yet. Import a dataset and run retraining to publish the first model.",
-                    retryText = "Reload dashboard",
-                    onRetry = { viewModel.load() },
+                NoActiveModelCard(
+                    hasDatasets = state.datasets.isNotEmpty(),
+                    hasModels = state.models.isNotEmpty(),
+                    onReload = { viewModel.load() },
                 )
             }
             if (isAdmin) {
-                state.evaluation?.let { evaluation ->
-                    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StatusBadge(text = "Evaluation", color = MaterialTheme.colorScheme.secondary)
-                            Text(text = "${evaluation.modelName} v${evaluation.version}", fontWeight = FontWeight.Bold)
-                            Text(text = "Accuracy ${(evaluation.accuracy * 100).toInt()}% | F1 ${(evaluation.f1Score * 100).toInt()}%")
-                            Text(text = "Train ${evaluation.trainingSamples} | Test ${evaluation.testSamples}")
-                        }
-                    }
+                if (state.evaluation != null) {
+                    PolishedEvaluationCard(evaluation = state.evaluation!!)
+                } else {
+                    EmptyCollectionCard(
+                        title = "No evaluation report yet",
+                        subtitle = "Train and activate a model to generate live evaluation metrics and confusion matrix data.",
+                    )
                 }
             }
-            if (isAdmin && state.models.isNotEmpty()) {
-                Text(text = "Active models", style = MaterialTheme.typography.titleLarge)
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(state.models) { model ->
-                        SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                StatusBadge(
-                                    text = if (model.isActive) "Active" else "Archived",
-                                    color = if (model.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
-                                )
-                                Text("${model.modelName} v${model.version}", fontWeight = FontWeight.Bold)
-                                Text("Accuracy ${(model.accuracy * 100).toInt()}% | F1 ${(model.f1Score * 100).toInt()}%")
-                                Text(model.trainingDataPath ?: "Training data not recorded")
-                            }
+            if (isAdmin) {
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text(text = "Active models", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    StatusBadge(text = "${state.models.size} models", color = MaterialTheme.colorScheme.secondary)
+                }
+                if (state.models.isEmpty()) {
+                    EmptyCollectionCard(
+                        title = "No trained models published yet",
+                        subtitle = "The first active model will appear here after dataset import and retraining.",
+                    )
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        state.models.forEach { model ->
+                            PolishedModelCard(model = model)
                         }
                     }
                 }
@@ -317,34 +314,36 @@ fun DashboardScreen(
                     }
                 }
 
-                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(text = "Retrain model", style = MaterialTheme.typography.titleLarge)
-                        OutlinedTextField(value = datasetId, onValueChange = { datasetId = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Dataset ID (optional)") })
-                        OutlinedTextField(value = dataPath, onValueChange = { dataPath = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Data path (optional)") })
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                            Text(text = "Force retrain", modifier = Modifier.weight(1f))
-                            androidx.compose.material3.Switch(checked = force, onCheckedChange = { force = it })
-                        }
-                        PrimaryButton(text = "Start retraining", onClick = {
-                            viewModel.retrain(
-                                datasetId = datasetId.toIntOrNull(),
-                                dataPath = dataPath.ifBlank { null },
-                                force = force,
-                            )
-                        })
-                    }
-                }
+                RetrainControlCard(
+                    datasetId = datasetId,
+                    onDatasetIdChange = { datasetId = it },
+                    dataPath = dataPath,
+                    onDataPathChange = { dataPath = it },
+                    force = force,
+                    onForceChange = { force = it },
+                    onStart = {
+                        viewModel.retrain(
+                            datasetId = datasetId.toIntOrNull(),
+                            dataPath = dataPath.ifBlank { null },
+                            force = force,
+                        )
+                    },
+                )
 
-                Text(text = "Datasets", style = MaterialTheme.typography.titleLarge)
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(state.datasets) { dataset ->
-                        SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(dataset.originalFilename, fontWeight = FontWeight.Bold)
-                                Text("Rows: ${dataset.rowCount}")
-                                Text(dataset.notes.ifBlank { "No notes" })
-                            }
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text(text = "Datasets", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    StatusBadge(text = "${state.datasets.size} files", color = MaterialTheme.colorScheme.secondary)
+                }
+                if (state.datasets.isEmpty()) {
+                    EmptyCollectionCard(
+                        title = "No datasets uploaded yet",
+                        subtitle = "Upload a labeled CSV to start training the first production model.",
+                    )
+                }
+                if (state.datasets.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        state.datasets.forEach { dataset ->
+                            PolishedDatasetCard(dataset = dataset)
                         }
                     }
                 }
@@ -385,4 +384,205 @@ private fun uriToMultipart(context: Context, uri: Uri): MultipartBody.Part {
         file.name,
         file.asRequestBody("text/csv".toMediaType()),
     )
+}
+
+@Composable
+private fun NoActiveModelCard(
+    hasDatasets: Boolean,
+    hasModels: Boolean,
+    onReload: () -> Unit,
+) {
+    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            StatusBadge(
+                text = "Model not deployed yet",
+                color = MaterialTheme.colorScheme.secondary,
+            )
+            Text(
+                text = "The dashboard is connected, but no active ML model has been published yet.",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "Once you import a labeled dataset and run retraining, the active model will appear here with accuracy, F1 score, and deployment details.",
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                StatusBadge(
+                    text = if (hasDatasets) "Dataset uploaded" else "No dataset yet",
+                    color = if (hasDatasets) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                )
+                StatusBadge(
+                    text = if (hasModels) "Training history found" else "No trained model",
+                    color = if (hasModels) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = "Next steps", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Text(text = "1. Upload a labeled SMS dataset")
+                Text(text = "2. Start retraining from the admin dashboard")
+                Text(text = "3. Activate the best model and review evaluation metrics")
+            }
+
+            PrimaryButton(
+                text = "Reload dashboard",
+                onClick = onReload,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PolishedModelCard(model: ModelDto) {
+    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+                    Text("${model.modelName} v${model.version}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = model.trainingDataPath ?: "Training data not recorded",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                }
+                StatusBadge(
+                    text = if (model.isActive) "Active" else "Archived",
+                    color = if (model.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                StatusBadge(text = "Acc ${(model.accuracy * 100).toInt()}%", color = MaterialTheme.colorScheme.secondary)
+                StatusBadge(text = "F1 ${(model.f1Score * 100).toInt()}%", color = MaterialTheme.colorScheme.secondary)
+                StatusBadge(text = "Trained ${model.trainedAt?.toString()?.take(10) ?: "recently"}", color = MaterialTheme.colorScheme.tertiary)
+            }
+
+            Text(
+                text = "Precision ${(model.precision * 100).toInt()}% | Recall ${(model.recall * 100).toInt()}%",
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PolishedDatasetCard(dataset: DatasetDto) {
+    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+                    Text(dataset.originalFilename, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = dataset.notes.ifBlank { "No notes provided" },
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                }
+                StatusBadge(text = "${dataset.rowCount} rows", color = MaterialTheme.colorScheme.primary)
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                StatusBadge(text = "Imported dataset", color = MaterialTheme.colorScheme.secondary)
+                StatusBadge(text = "Training ready", color = MaterialTheme.colorScheme.secondary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyCollectionCard(title: String, subtitle: String) {
+    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            StatusBadge(text = "Nothing here yet", color = MaterialTheme.colorScheme.tertiary)
+            Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(text = subtitle, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
+        }
+    }
+}
+
+@Composable
+private fun PolishedEvaluationCard(evaluation: EvaluationReportDto) {
+    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+                    StatusBadge(text = "Evaluation", color = MaterialTheme.colorScheme.secondary)
+                    Text(
+                        text = "${evaluation.modelName} v${evaluation.version}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "Live metrics for the currently active SMS fraud detector.",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                }
+                StatusBadge(
+                    text = "${(evaluation.accuracy * 100).toInt()}% accuracy",
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                StatusBadge(text = "F1 ${(evaluation.f1Score * 100).toInt()}%", color = MaterialTheme.colorScheme.secondary)
+                StatusBadge(text = "Precision ${(evaluation.precision * 100).toInt()}%", color = MaterialTheme.colorScheme.secondary)
+                StatusBadge(text = "Recall ${(evaluation.recall * 100).toInt()}%", color = MaterialTheme.colorScheme.secondary)
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                MetricCard("Train", evaluation.trainingSamples.toString(), "Samples", modifier = Modifier.weight(1f))
+                MetricCard("Test", evaluation.testSamples.toString(), "Samples", modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun RetrainControlCard(
+    datasetId: String,
+    onDatasetIdChange: (String) -> Unit,
+    dataPath: String,
+    onDataPathChange: (String) -> Unit,
+    force: Boolean,
+    onForceChange: (Boolean) -> Unit,
+    onStart: () -> Unit,
+) {
+    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Rounded.Upload, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(text = "Retrain model", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Choose a dataset ID or an explicit data path, then retrain the current model.",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                }
+            }
+            OutlinedTextField(
+                value = datasetId,
+                onValueChange = onDatasetIdChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Dataset ID (optional)") },
+            )
+            OutlinedTextField(
+                value = dataPath,
+                onValueChange = onDataPathChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Data path (optional)") },
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                StatusBadge(
+                    text = if (force) "Force enabled" else "Force disabled",
+                    color = if (force) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.weight(1f),
+                )
+                androidx.compose.material3.Switch(checked = force, onCheckedChange = onForceChange)
+            }
+            PrimaryButton(
+                text = "Start retraining",
+                onClick = onStart,
+            )
+        }
+    }
 }

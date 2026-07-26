@@ -1,5 +1,17 @@
 package com.smsai.smsfrauddetector.features.report
 
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
+import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,28 +22,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Send
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -46,45 +51,76 @@ import com.smsai.smsfrauddetector.core.designsystem.components.StatusBadge
 import com.smsai.smsfrauddetector.core.designsystem.components.SurfaceCard
 import com.smsai.smsfrauddetector.data.remote.dto.FraudReportDto
 import com.smsai.smsfrauddetector.data.repository.AppRepository
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class ReportUiState(
     val loading: Boolean = true,
-    val items: List<FraudReportDto> = emptyList(),
+    val viewerRole: String? = null,
+    val reports: List<FraudReportDto> = emptyList(),
+    val summary: Map<String, Int> = emptyMap(),
     val error: String? = null,
-    val submitStatus: String? = null,
 )
 
-class ReportViewModel(
-    private val repository: AppRepository,
-) : ViewModel() {
+class ReportViewModel(private val repository: AppRepository) : ViewModel() {
     private val _state = MutableStateFlow(ReportUiState())
     val state: StateFlow<ReportUiState> = _state.asStateFlow()
 
     fun load() {
         viewModelScope.launch {
-            when (val result = repository.reports()) {
-                is ApiResult.Success -> _state.value = ReportUiState(loading = false, items = result.data.results)
-                is ApiResult.Error -> _state.value = ReportUiState(loading = false, error = result.message)
-                else -> Unit
+            _state.value = _state.value.copy(loading = true, error = null)
+            val session = repository.currentSession()
+            val isAdmin = session.user?.role.equals("Admin", ignoreCase = true)
+
+            val reportsResult = repository.reports(page = 1, pageSize = 100)
+            val adminSummaryResult = if (isAdmin) repository.reportDashboard() else null
+
+            val reports = when (reportsResult) {
+                is ApiResult.Success -> reportsResult.data.results
+                else -> emptyList()
             }
+            val summary = when (adminSummaryResult) {
+                is ApiResult.Success -> adminSummaryResult.data
+                else -> buildLocalSummary(reports)
+            }
+            val error = listOfNotNull(
+                reportsResult.takeIf { it is ApiResult.Error }?.let { (it as ApiResult.Error).message },
+                adminSummaryResult.takeIf { it is ApiResult.Error }?.let { (it as ApiResult.Error).message },
+            ).firstOrNull()
+
+            _state.value = ReportUiState(
+                loading = false,
+                viewerRole = session.user?.role,
+                reports = reports,
+                summary = summary,
+                error = error,
+            )
         }
     }
 
-    fun submit(message: String, notes: String, analysisId: Int? = null) {
-        viewModelScope.launch {
-            when (val result = repository.createReport(message = message, notes = notes, analysisId = analysisId)) {
-                is ApiResult.Success -> {
-                    _state.value = _state.value.copy(submitStatus = "Report created with status ${result.data.status}.")
-                    load()
-                }
-                is ApiResult.Error -> _state.value = _state.value.copy(submitStatus = result.message)
-                else -> Unit
-            }
-        }
+    private fun buildLocalSummary(reports: List<FraudReportDto>): Map<String, Int> {
+        val pending = reports.count { it.status.equals("PENDING", ignoreCase = true) }
+        val reviewing = reports.count { it.status.equals("REVIEWING", ignoreCase = true) }
+        val reviewed = reports.count { it.status.equals("REVIEWED", ignoreCase = true) }
+        val resolved = reports.count { it.status.equals("RESOLVED", ignoreCase = true) }
+        val rejected = reports.count { it.status.equals("REJECTED", ignoreCase = true) }
+        return mapOf(
+            "total_reports" to reports.size,
+            "pending_reports" to pending,
+            "reviewing_reports" to reviewing,
+            "reviewed_reports" to reviewed,
+            "resolved_reports" to resolved,
+            "rejected_reports" to rejected,
+        )
     }
 }
 
@@ -94,55 +130,145 @@ fun ReportScreen(repository: AppRepository) {
         factory = remember(repository) { SimpleViewModelFactory { ReportViewModel(repository) } },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var message by rememberSaveable { mutableStateOf("") }
-    var notes by rememberSaveable { mutableStateOf("") }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val isAdmin = state.viewerRole.equals("Admin", ignoreCase = true)
     var bannerMessage by remember { mutableStateOf<String?>(null) }
     var bannerTone by remember { mutableStateOf(BannerTone.Info) }
 
     LaunchedEffect(Unit) { viewModel.load() }
-    LaunchedEffect(state.submitStatus) {
-        val status = state.submitStatus ?: return@LaunchedEffect
-        bannerMessage = status
-        bannerTone = if (status.contains("status", ignoreCase = true) || status.contains("created", ignoreCase = true)) {
-            BannerTone.Success
-        } else {
-            BannerTone.Error
-        }
-        kotlinx.coroutines.delay(2400)
-        bannerMessage = null
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(text = "Reports", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(text = "Escalate suspicious messages and track admin review.")
-
-            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(value = message, onValueChange = { message = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Message") })
-                    OutlinedTextField(value = notes, onValueChange = { notes = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Notes") })
-                    PrimaryButton(
-                        text = "Submit report",
-                        onClick = { viewModel.submit(message, notes) },
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatusBadge(
+                        text = if (isAdmin) "Admin report center" else "Your report export",
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
+                    Text(
+                        text = if (isAdmin) "Live review metrics, report backlog, and downloadable export." else "Your generated incident history, ready to export as PDF.",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = if (isAdmin) {
+                            "This view is generated from live backend data and reflects the current review workload."
+                        } else {
+                            "This view is generated from your own submitted reports and current review status."
+                        },
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                     )
                 }
             }
 
-            if (state.loading) {
-                CircularProgressIndicator()
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    MetricTile(
+                        title = "Total",
+                        value = state.summary["total_reports"].orZero().toString(),
+                        subtitle = if (isAdmin) "All reports" else "Your reports",
+                        modifier = Modifier.weight(1f),
+                    )
+                    MetricTile(
+                        title = "Pending",
+                        value = state.summary["pending_reports"].orZero().toString(),
+                        subtitle = "Awaiting review",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    MetricTile(
+                        title = "Reviewed",
+                        value = state.summary["reviewed_reports"].orZero().toString(),
+                        subtitle = "Completed",
+                        modifier = Modifier.weight(1f),
+                    )
+                    MetricTile(
+                        title = if (isAdmin) "Resolved" else "Status",
+                        value = if (isAdmin) state.summary["resolved_reports"].orZero().toString() else state.reports.count { it.status.equals("RESOLVED", ignoreCase = true) }.toString(),
+                        subtitle = if (isAdmin) "Closed cases" else "Live activity",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
-            state.error?.let { ErrorStateCard(message = it, retryText = "Reload reports", onRetry = { viewModel.load() }) }
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(state.items) { report ->
-                    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StatusBadge(text = report.status.uppercase(), color = MaterialTheme.colorScheme.primary)
-                            Text(text = report.smsMessage)
-                            Text(text = report.notes.ifBlank { "No notes provided." })
-                            Text(text = report.reviewedAt ?: report.createdAt ?: "Pending review", style = MaterialTheme.typography.labelMedium)
+            item {
+                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                            PrimaryButton(
+                                text = "Export PDF",
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    coroutineScope.launch {
+                                        try {
+                                            val uri = createReportPdf(context, state, isAdmin)
+                                            sharePdf(context, uri, if (isAdmin) "Admin report" else "My report")
+                                            bannerMessage = "PDF exported successfully."
+                                            bannerTone = BannerTone.Success
+                                        } catch (exc: Exception) {
+                                            bannerMessage = exc.message ?: "Unable to export PDF."
+                                            bannerTone = BannerTone.Error
+                                        }
+                                    }
+                                },
+                                trailingIcon = true,
+                            )
+                            PrimaryButton(
+                                text = "Refresh",
+                                modifier = Modifier.weight(1f),
+                                onClick = { viewModel.load() },
+                                trailingIcon = true,
+                            )
                         }
+                        Text(
+                            text = if (isAdmin) {
+                                "Admin exports include review totals, backlog counts, and the latest reports."
+                            } else {
+                                "User exports include your submitted reports and their current review outcomes."
+                            },
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                        )
                     }
+                }
+            }
+
+            state.error?.let { error ->
+                item {
+                    ErrorStateCard(message = error, retryText = "Reload reports", onRetry = { viewModel.load() })
+                }
+            }
+
+            item {
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = if (isAdmin) "All reports" else "My reports",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    StatusBadge(
+                        text = "${state.reports.size} items",
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
+            if (state.reports.isEmpty()) {
+                item {
+                    EmptyReportCard(
+                        title = if (isAdmin) "No reports found yet" else "You have not submitted a report yet",
+                        subtitle = if (isAdmin) "When users submit reports, they will appear here for review and export." else "Any reports you submit or receive review on will appear here automatically.",
+                    )
+                }
+            } else {
+                items(state.reports, key = { it.id }) { report ->
+                    ReportCard(report = report, isAdmin = isAdmin)
                 }
             }
         }
@@ -160,3 +286,273 @@ fun ReportScreen(repository: AppRepository) {
         }
     }
 }
+
+private suspend fun createReportPdf(context: Context, state: ReportUiState, isAdmin: Boolean): Uri = withContext(Dispatchers.IO) {
+    val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
+    val fileStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+    val outputDir = File(context.cacheDir, "reports").apply { mkdirs() }
+    val outputFile = File(outputDir, "sms_report_${if (isAdmin) "admin" else "user"}_$fileStamp.pdf")
+
+    val document = PdfDocument()
+    val pageWidth = 1080f
+    val pageHeight = 1600f
+    val pageInfo = PdfDocument.PageInfo.Builder(pageWidth.toInt(), pageHeight.toInt(), 1).create()
+    val page = document.startPage(pageInfo)
+    val canvas: Canvas = page.canvas
+    canvas.drawColor(android.graphics.Color.WHITE)
+
+    val bandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = android.graphics.Color.rgb(20, 88, 79)
+    }
+    val bandAccentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = android.graphics.Color.rgb(31, 118, 105)
+    }
+    val bandTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 18f
+        fakeBoldText = true
+        color = android.graphics.Color.WHITE
+    }
+    val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 38f
+        fakeBoldText = true
+        color = android.graphics.Color.BLACK
+    }
+    val subtitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 22f
+        color = android.graphics.Color.DKGRAY
+    }
+    val sectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 24f
+        fakeBoldText = true
+        color = android.graphics.Color.rgb(34, 102, 92)
+    }
+    val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 18f
+        fakeBoldText = true
+        color = android.graphics.Color.GRAY
+    }
+    val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 20f
+        color = android.graphics.Color.DKGRAY
+    }
+    val mutedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 18f
+        color = android.graphics.Color.GRAY
+    }
+    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+        color = android.graphics.Color.rgb(225, 229, 232)
+    }
+    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = android.graphics.Color.rgb(245, 248, 249)
+    }
+    val accentFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = android.graphics.Color.rgb(232, 243, 241)
+    }
+
+    canvas.drawRect(0f, 0f, pageWidth, 150f, bandPaint)
+    canvas.drawCircle(92f, 75f, 34f, bandAccentPaint)
+    canvas.drawText("SF", 68f, 82f, bandTextPaint)
+    canvas.drawText("SMS Fraud Detector", 150f, 62f, bandTextPaint)
+    canvas.drawText(if (isAdmin) "Admin Export" else "User Export", 150f, 104f, bandTextPaint)
+    canvas.drawText("Live backend report", 780f, 62f, bandTextPaint)
+    canvas.drawText(stamp, 780f, 104f, bandTextPaint)
+
+    var y = 190f
+    canvas.drawText(if (isAdmin) "Admin Report Export" else "User Report Export", 70f, y, titlePaint)
+    y += 34f
+    canvas.drawText(
+        if (isAdmin) "A formal snapshot of system review activity and live backend report data." else "A formal snapshot of your submitted reports and current review outcomes.",
+        70f,
+        y,
+        subtitlePaint,
+    )
+
+    y += 30f
+    canvas.drawRect(70f, y, 1010f, y + 78f, accentFillPaint)
+    canvas.drawRect(70f, y, 1010f, y + 78f, borderPaint)
+    canvas.drawText("Generated", 92f, y + 30f, labelPaint)
+    canvas.drawText(stamp, 92f, y + 58f, bodyPaint)
+    canvas.drawText("Scope", 424f, y + 30f, labelPaint)
+    canvas.drawText(if (isAdmin) "Admin dashboard" else "Personal report", 424f, y + 58f, bodyPaint)
+    canvas.drawText("Records", 712f, y + 30f, labelPaint)
+    canvas.drawText("${state.reports.size} items", 712f, y + 58f, bodyPaint)
+    y += 112f
+
+    canvas.drawText("Summary", 70f, y, sectionPaint)
+    y += 18f
+    canvas.drawLine(70f, y, 1010f, y, borderPaint)
+    y += 38f
+
+    val summaryRows = listOf(
+        "Total reports" to state.summary["total_reports"].orZero(),
+        "Pending" to state.summary["pending_reports"].orZero(),
+        "Reviewing" to state.summary["reviewing_reports"].orZero(),
+        "Reviewed" to state.summary["reviewed_reports"].orZero(),
+        "Resolved" to state.summary["resolved_reports"].orZero(),
+        "Rejected" to state.summary["rejected_reports"].orZero(),
+    )
+
+    summaryRows.chunked(2).forEach { pair ->
+        val left = pair[0]
+        val right = pair.getOrNull(1)
+        canvas.drawRect(70f, y - 18f, 500f, y + 46f, fillPaint)
+        canvas.drawRect(70f, y - 18f, 500f, y + 46f, borderPaint)
+        canvas.drawText(left.first, 92f, y + 6f, labelPaint)
+        canvas.drawText(left.second.toString(), 92f, y + 34f, bodyPaint)
+        right?.let {
+            canvas.drawRect(580f, y - 18f, 1010f, y + 46f, fillPaint)
+            canvas.drawRect(580f, y - 18f, 1010f, y + 46f, borderPaint)
+            canvas.drawText(it.first, 602f, y + 6f, labelPaint)
+            canvas.drawText(it.second.toString(), 602f, y + 34f, bodyPaint)
+        }
+        y += 72f
+    }
+
+    y += 12f
+    canvas.drawText("Recent reports", 70f, y, sectionPaint)
+    y += 18f
+    canvas.drawLine(70f, y, 1010f, y, borderPaint)
+    y += 34f
+
+    val maxItems = minOf(state.reports.size, 8)
+    if (maxItems == 0) {
+        canvas.drawText("No report records are available yet.", 92f, y + 18f, bodyPaint)
+    } else {
+        canvas.drawText("ID", 92f, y, labelPaint)
+        canvas.drawText("Status", 188f, y, labelPaint)
+        canvas.drawText("Message", 340f, y, labelPaint)
+        canvas.drawText("Updated", 888f, y, labelPaint)
+        y += 18f
+        canvas.drawLine(90f, y, 1000f, y, borderPaint)
+        y += 24f
+        for (report in state.reports.take(maxItems)) {
+            if (y > 1460f) break
+            canvas.drawRect(70f, y - 16f, 1010f, y + 48f, fillPaint)
+            canvas.drawRect(70f, y - 16f, 1010f, y + 48f, borderPaint)
+            canvas.drawText("#${report.id}", 92f, y + 10f, bodyPaint)
+            canvas.drawText(report.status.uppercase(Locale.getDefault()), 188f, y + 10f, bodyPaint)
+            canvas.drawText(report.smsMessage.take(58), 340f, y + 10f, bodyPaint)
+            canvas.drawText((report.reviewedAt ?: report.createdAt ?: "Pending"), 888f, y + 10f, bodyPaint)
+            y += 64f
+        }
+    }
+
+    if (state.reports.size > maxItems) {
+        canvas.drawText(
+            "Additional records are available inside the app (${state.reports.size - maxItems} more).",
+            70f,
+            1510f,
+            mutedPaint,
+        )
+    }
+
+    canvas.drawLine(70f, 1540f, 1010f, 1540f, borderPaint)
+    canvas.drawText("Confidential report generated by SMS Fraud Detector", 70f, 1570f, mutedPaint)
+    canvas.drawText("Page 1", 940f, 1570f, mutedPaint)
+
+    document.finishPage(page)
+    FileOutputStream(outputFile).use { out -> document.writeTo(out) }
+    document.close()
+    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", outputFile)
+}
+
+private fun sharePdf(context: Context, uri: Uri, title: String) {
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "application/pdf"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_SUBJECT, title)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (context !is Activity) {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
+    context.startActivity(Intent.createChooser(shareIntent, title))
+}
+
+@Composable
+private fun ReportCard(report: FraudReportDto, isAdmin: Boolean) {
+    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isAdmin && report.user != null) "Report #${report.id} by ${report.user}" else "Report #${report.id}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = report.smsMessage,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+                        maxLines = 3,
+                    )
+                }
+                StatusBadge(
+                    text = report.status.uppercase(Locale.getDefault()),
+                    color = reportStatusColor(report.status),
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                StatusBadge(text = if (report.analysis != null) "Linked analysis" else "Standalone", color = MaterialTheme.colorScheme.primary)
+                StatusBadge(text = report.analysis?.prediction ?: "No prediction", color = MaterialTheme.colorScheme.secondary)
+            }
+
+            Text(
+                text = report.notes.ifBlank { "No notes provided." },
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+            report.adminNotes.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = "Admin notes: $it",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                )
+            }
+
+            Text(
+                text = report.reviewedAt ?: report.createdAt ?: "Pending review",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.64f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyReportCard(title: String, subtitle: String) {
+    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            StatusBadge(text = "No export data yet", color = MaterialTheme.colorScheme.tertiary)
+            Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(text = subtitle, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
+        }
+    }
+}
+
+@Composable
+private fun MetricTile(title: String, value: String, subtitle: String, modifier: Modifier = Modifier) {
+    SurfaceCard(modifier = modifier) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(text = title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
+            Text(text = value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f))
+        }
+    }
+}
+
+@Composable
+private fun reportStatusColor(status: String) = when (status.uppercase(Locale.getDefault())) {
+    "PENDING" -> MaterialTheme.colorScheme.tertiary
+    "REVIEWING" -> MaterialTheme.colorScheme.secondary
+    "REVIEWED" -> MaterialTheme.colorScheme.primary
+    "RESOLVED" -> MaterialTheme.colorScheme.primary
+    "REJECTED" -> MaterialTheme.colorScheme.error
+    else -> MaterialTheme.colorScheme.secondary
+}
+
+private fun Int?.orZero(): Int = this ?: 0

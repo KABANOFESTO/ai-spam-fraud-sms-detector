@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db.models import Avg, Count, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
+from django.db.utils import DatabaseError, OperationalError, ProgrammingError
 from rest_framework import generics, permissions, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
@@ -32,6 +33,20 @@ from .services import SmsFraudDetector, clear_detector_cache
 
 
 detector = SmsFraudDetector()
+
+
+def _safe_active_model():
+    try:
+        return MLModel.objects.filter(is_active=True).order_by("-trained_at").first()
+    except (ProgrammingError, OperationalError, DatabaseError):
+        return None
+
+
+def _safe_model_queryset(queryset):
+    try:
+        return list(queryset)
+    except (ProgrammingError, OperationalError, DatabaseError):
+        return []
 
 
 class AnalysisPagination(PageNumberPagination):
@@ -223,7 +238,7 @@ class DashboardView(APIView):
             .order_by("-total")[:5]
         )
 
-        active_model = MLModel.objects.filter(is_active=True).order_by("-trained_at").first()
+        active_model = _safe_active_model()
 
         return Response(
             {
@@ -257,20 +272,21 @@ class ActiveModelView(generics.ListAPIView):
     queryset = MLModel.objects.filter(is_active=True).order_by("-trained_at")
 
     def list(self, request, *args, **kwargs):
-        payload = [
-            {
-                "id": model.id,
-                "model_name": model.model_name,
-                "version": model.version,
-                "accuracy": model.accuracy,
-                "precision": model.precision,
-                "recall": model.recall,
-                "f1_score": model.f1_score,
-                "trained_at": model.trained_at,
-                "is_active": model.is_active,
-            }
-            for model in self.get_queryset()
-        ]
+        payload = []
+        for model in _safe_model_queryset(self.get_queryset()):
+            payload.append(
+                {
+                    "id": model.id,
+                    "model_name": model.model_name,
+                    "version": model.version,
+                    "accuracy": model.accuracy,
+                    "precision": model.precision,
+                    "recall": model.recall,
+                    "f1_score": model.f1_score,
+                    "trained_at": model.trained_at,
+                    "is_active": model.is_active,
+                }
+            )
         return Response(payload)
 
 
@@ -456,7 +472,10 @@ class EvaluationReportView(APIView):
         else:
             queryset = queryset.filter(is_active=True)
 
-        model = queryset.order_by("-trained_at").first()
+        try:
+            model = queryset.order_by("-trained_at").first()
+        except (ProgrammingError, OperationalError, DatabaseError):
+            model = None
         if model is None:
             return Response({"error": "No trained model found."}, status=status.HTTP_404_NOT_FOUND)
 

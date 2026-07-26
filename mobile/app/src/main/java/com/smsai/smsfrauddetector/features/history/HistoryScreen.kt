@@ -3,19 +3,12 @@ package com.smsai.smsfrauddetector.features.history
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -84,13 +77,22 @@ fun HistoryScreen(repository: AppRepository) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-            Column {
+        SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatusBadge(text = "Live analysis history", color = MaterialTheme.colorScheme.secondary)
                 Text(text = "History", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text(text = "Recent predictions and classifications")
+                Text(
+                    text = "Recent predictions and classifications pulled directly from the backend.",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    StatusBadge(text = "Stored records", color = MaterialTheme.colorScheme.primary)
+                    StatusBadge(text = "Backend synced", color = MaterialTheme.colorScheme.primary)
+                }
             }
-            PrimaryButton(text = "Refresh", onClick = { viewModel.load() })
         }
+
+        PrimaryButton(text = "Refresh", onClick = { viewModel.load() })
 
         if (state.loading) {
             CircularProgressIndicator()
@@ -100,17 +102,29 @@ fun HistoryScreen(repository: AppRepository) {
             ErrorStateCard(message = it, retryText = "Reload history", onRetry = { viewModel.load() })
         }
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(state.items) { item ->
-                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        StatusBadge(
-                            text = item.prediction.uppercase(),
-                            color = if (item.isSuspicious) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                        )
-                        Text(text = item.message, maxLines = 3)
-                        Text(text = "Confidence ${(item.confidence * 100).roundToInt()}%")
-                        Text(text = item.analyzedAt ?: "Recently analyzed", style = MaterialTheme.typography.labelMedium)
+        if (state.items.isEmpty() && !state.loading) {
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatusBadge(text = "No history yet", color = MaterialTheme.colorScheme.tertiary)
+                    Text(text = "No analyses have been recorded yet.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(text = "When SMS messages are analyzed, the saved results will appear here automatically.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
+                }
+            }
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(state.items) { item ->
+                    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                StatusBadge(
+                                    text = item.prediction.uppercase(),
+                                    color = if (item.isSuspicious) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                )
+                                Text(text = "Confidence ${(item.confidence * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                            }
+                            Text(text = item.message, maxLines = 3)
+                            Text(text = item.analyzedAt ?: "Recently analyzed", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 }
             }

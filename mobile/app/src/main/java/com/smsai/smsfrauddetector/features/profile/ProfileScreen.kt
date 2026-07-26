@@ -13,8 +13,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Logout
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -40,6 +38,7 @@ import com.smsai.smsfrauddetector.core.designsystem.components.BannerTone
 import com.smsai.smsfrauddetector.core.designsystem.components.ErrorStateCard
 import com.smsai.smsfrauddetector.core.designsystem.components.FeedbackBanner
 import com.smsai.smsfrauddetector.core.designsystem.components.PrimaryButton
+import com.smsai.smsfrauddetector.core.designsystem.components.StatusBadge
 import com.smsai.smsfrauddetector.core.designsystem.components.SurfaceCard
 import com.smsai.smsfrauddetector.data.remote.dto.UserDto
 import com.smsai.smsfrauddetector.data.repository.AppRepository
@@ -131,24 +130,52 @@ fun ProfileScreen(repository: AppRepository, onLogout: () -> Unit) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(text = "Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatusBadge(text = "Secure account", color = MaterialTheme.colorScheme.secondary)
+                    Text(text = "Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Update your account details and password using the live backend profile service.",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        StatusBadge(text = "Live sync", color = MaterialTheme.colorScheme.primary)
+                        StatusBadge(text = "Password change", color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+
             if (state.loading) {
                 CircularProgressIndicator()
             }
             state.error?.let { ErrorStateCard(message = it, retryText = "Reload profile", onRetry = { viewModel.load() }) }
             SurfaceCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(text = "Account details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     OutlinedTextField(value = username, onValueChange = { username = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Username") })
                     OutlinedTextField(value = firstName, onValueChange = { firstName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("First name") })
                     OutlinedTextField(value = lastName, onValueChange = { lastName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Last name") })
+                    Text(
+                        text = "For security, the password fields are sent only when you save changes.",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                    Text(text = "Password update", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     OutlinedTextField(value = currentPassword, onValueChange = { currentPassword = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Current password") })
                     OutlinedTextField(value = newPassword, onValueChange = { newPassword = it }, modifier = Modifier.fillMaxWidth(), label = { Text("New password") })
                     PrimaryButton(text = "Save profile", onClick = { viewModel.save(username, firstName, lastName, currentPassword, newPassword) })
                 }
             }
-            PrimaryButton(text = "Logout", onClick = {
-                viewModel.logout(onLogout)
-            })
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatusBadge(text = "Session", color = MaterialTheme.colorScheme.tertiary)
+                    Text(text = "Logout", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "Use this to safely end the current session on this device.",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                    PrimaryButton(text = "Logout", onClick = { viewModel.logout(onLogout) })
+                }
+            }
         }
 
         AnimatedVisibility(
