@@ -311,12 +311,12 @@ private suspend fun createReportPdf(context: Context, state: ReportUiState, isAd
     }
     val bandTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = 18f
-        fakeBoldText = true
+        isFakeBoldText = true
         color = android.graphics.Color.WHITE
     }
     val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = 38f
-        fakeBoldText = true
+        isFakeBoldText = true
         color = android.graphics.Color.BLACK
     }
     val subtitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -325,12 +325,12 @@ private suspend fun createReportPdf(context: Context, state: ReportUiState, isAd
     }
     val sectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = 24f
-        fakeBoldText = true
+        isFakeBoldText = true
         color = android.graphics.Color.rgb(34, 102, 92)
     }
     val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = 18f
-        fakeBoldText = true
+        isFakeBoldText = true
         color = android.graphics.Color.GRAY
     }
     val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
