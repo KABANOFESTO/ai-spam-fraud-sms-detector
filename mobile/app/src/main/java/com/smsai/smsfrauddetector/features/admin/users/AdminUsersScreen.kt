@@ -237,16 +237,23 @@ fun AdminUsersScreen(repository: AppRepository) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "User management",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = "Create temporary accounts, change access, activate or deactivate users, and remove accounts safely.",
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                    )
+                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        StatusBadge(text = "Admin control center", color = MaterialTheme.colorScheme.secondary)
+                        Text(
+                            text = "User management",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "Create temporary accounts, change access, activate or deactivate users, and remove accounts safely.",
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                            StatusBadge(text = "Live sync", color = MaterialTheme.colorScheme.primary)
+                            StatusBadge(text = "Temporary passwords", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 }
             }
 
@@ -345,8 +352,15 @@ fun AdminUsersScreen(repository: AppRepository) {
 
             item {
                 if (state.loading) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                        CircularProgressIndicator()
+                    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            StatusBadge(text = "Loading users", color = MaterialTheme.colorScheme.tertiary)
+                            CircularProgressIndicator()
+                            Text(
+                                text = "Fetching the latest accounts from the backend...",
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                            )
+                        }
                     }
                 }
             }
@@ -359,6 +373,26 @@ fun AdminUsersScreen(repository: AppRepository) {
 
             item {
                 Text(text = "Accounts", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            }
+
+            if (!state.loading && state.users.isEmpty() && state.error == null) {
+                item {
+                    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            StatusBadge(text = "No users yet", color = MaterialTheme.colorScheme.tertiary)
+                            Text(
+                                text = "Your user directory is empty right now.",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                text = "Create the first account or reload the list once the backend is ready.",
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                            )
+                            PrimaryButton(text = "Reload users", onClick = { viewModel.load() })
+                        }
+                    }
+                }
             }
 
             items(state.users, key = { it.id }) { user ->
