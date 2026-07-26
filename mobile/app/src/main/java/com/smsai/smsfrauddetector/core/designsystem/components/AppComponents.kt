@@ -65,7 +65,12 @@ fun PrimaryButton(
 }
 
 @Composable
-fun StatusBadge(text: String, color: Color, modifier: Modifier = Modifier) {
+fun StatusBadge(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+) {
     Surface(
         modifier = modifier
             .clip(RoundedCornerShape(999.dp))
@@ -76,8 +81,8 @@ fun StatusBadge(text: String, color: Color, modifier: Modifier = Modifier) {
         Text(
             text = text,
             color = color,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = if (compact) 10.dp else 14.dp, vertical = if (compact) 5.dp else 8.dp),
+            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
         )
     }
