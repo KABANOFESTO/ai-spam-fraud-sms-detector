@@ -196,7 +196,20 @@ fun SettingsScreen(repository: AppRepository) {
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(text = "Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatusBadge(text = "App control center", color = MaterialTheme.colorScheme.secondary)
+                    Text(text = "Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Configure the backend, theme, and SMS tracking permissions from one secure place.",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        StatusBadge(text = "Backend sync", color = MaterialTheme.colorScheme.primary)
+                        StatusBadge(text = "Tracking setup", color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
 
             state.error?.let {
                 ErrorStateCard(message = it, retryText = "Reload settings", onRetry = { viewModel.load() })
@@ -205,6 +218,10 @@ fun SettingsScreen(repository: AppRepository) {
             SurfaceCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(text = "Core app settings", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "These values are saved locally and used by the app to reach the live backend.",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
                     OutlinedTextField(
                         value = baseUrl,
                         onValueChange = { baseUrl = it },
@@ -247,6 +264,17 @@ fun SettingsScreen(repository: AppRepository) {
                         },
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
                     )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        StatusBadge(
+                            text = if (trackingReady) "Ready to monitor" else "Setup required",
+                            color = if (trackingReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                        )
+                        StatusBadge(
+                            text = if (state.smsMonitoring) "Monitoring on" else "Monitoring off",
+                            color = if (state.smsMonitoring) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
 
                     PrimaryButton(
                         text = if (state.smsMonitoring) "Disable tracking" else "Enable tracking",

@@ -8,6 +8,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework import status
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+from django.db.utils import DatabaseError, OperationalError, ProgrammingError
 from analysis.services import detector_is_ready
 from ml_models.models import MLModel
 
@@ -25,7 +26,10 @@ schema_view = get_schema_view(
 
 @api_view(["GET"])
 def health_check(request):
-    active_model = MLModel.objects.filter(is_active=True).order_by("-trained_at").first()
+    try:
+        active_model = MLModel.objects.filter(is_active=True).order_by("-trained_at").first()
+    except (ProgrammingError, OperationalError, DatabaseError):
+        active_model = None
     return Response(
         {
             "status": "ok",

@@ -206,6 +206,8 @@ class AppRepository(
         api().reports(page = page, pageSize = pageSize)
     }
 
+    suspend fun reportDashboard(): ApiResult<Map<String, Int>> = call { api().reportDashboard() }
+
     suspend fun datasets(page: Int = 1, pageSize: Int = 20): ApiResult<PaginatedResponse<DatasetDto>> = call {
         api().datasets(page = page, pageSize = pageSize)
     }

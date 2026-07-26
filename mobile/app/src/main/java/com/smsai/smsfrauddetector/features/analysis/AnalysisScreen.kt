@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,13 +18,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.CrisisAlert
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -145,9 +139,27 @@ fun AnalysisScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatusBadge(
+                        text = "Live SMS analysis",
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
                     Text(text = "Analyze SMS", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text(text = "Paste or type the suspicious SMS content and let the model classify it.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
+                    Text(
+                        text = "Paste or type a suspicious SMS and let the model classify it in real time.",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        StatusBadge(text = "Dynamic prediction", color = MaterialTheme.colorScheme.primary)
+                        StatusBadge(text = "Saved analysis", color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(text = "Message input", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(text = "The model response updates from the backend and can be saved as a report when the message is suspicious.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
                     OutlinedTextField(
                         value = message,
                         onValueChange = { message = it },
@@ -173,7 +185,7 @@ fun AnalysisScreen(
                     if (state.analyzing) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator(modifier = Modifier.width(24.dp).height(24.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(12.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(12.dp))
                             Text("Analyzing message...")
                         }
                     }
@@ -199,7 +211,7 @@ fun AnalysisScreen(
                         Text(text = "Matched signals", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (result.matchedSignals.isEmpty()) {
-                                Text("No specific signals matched.")
+                                StatusBadge(text = "No specific signals matched", color = MaterialTheme.colorScheme.tertiary)
                             } else {
                                 result.matchedSignals.take(4).forEach { signal ->
                                     FilterChip(selected = true, onClick = {}, label = { Text(signal) })
@@ -219,6 +231,15 @@ fun AnalysisScreen(
                                 onClick = { viewModel.clear(); message = "" },
                             )
                         }
+                    }
+                }
+            }
+
+            if (state.result == null && !state.analyzing) {
+                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(text = "What happens next", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(text = "Once you analyze a message, the confidence score, matched signals, and save-report action appear here.")
                     }
                 }
             }
