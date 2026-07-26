@@ -48,8 +48,8 @@ class HomeViewModel(
                 is ApiResult.Error -> null
                 else -> null
             }
-            val activeModel = when (val result = repository.activeModels()) {
-                is ApiResult.Success -> result.data.firstOrNull()
+            val activeModel = when (val result = repository.currentActiveModel()) {
+                is ApiResult.Success -> result.data
                 is ApiResult.Error -> null
                 else -> null
             }

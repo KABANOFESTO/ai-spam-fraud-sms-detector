@@ -15,7 +15,6 @@ import com.smsai.smsfrauddetector.data.remote.dto.HealthDto
 import com.smsai.smsfrauddetector.data.remote.dto.LoginRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.ForgotPasswordRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.LogoutRequestDto
-import com.smsai.smsfrauddetector.data.remote.dto.ModelDto
 import com.smsai.smsfrauddetector.data.remote.dto.PaginatedResponse
 import com.smsai.smsfrauddetector.data.remote.dto.ProfileUpdateResponseDto
 import com.smsai.smsfrauddetector.data.remote.dto.ResetPasswordRequestDto
@@ -41,6 +40,7 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.QueryMap
 import retrofit2.http.Url
+import okhttp3.ResponseBody
 
 interface ApiService {
     @POST("api/auth/login/")
@@ -93,7 +93,7 @@ interface ApiService {
     suspend fun history(
         @Query("page") page: Int? = null,
         @Query("page_size") pageSize: Int? = null,
-        @QueryMap(encoded = true) filters: Map<String, String>? = null,
+        @QueryMap(encoded = true) filters: Map<String, String> = emptyMap(),
     ): PaginatedResponse<AnalysisResultDto>
 
     @GET("api/analysis/stats/")
@@ -134,7 +134,7 @@ interface ApiService {
     suspend fun retrain(@Body body: Map<String, @JvmSuppressWildcards Any>): Map<String, Any>
 
     @GET("api/analysis/models/")
-    suspend fun activeModels(): List<ModelDto>
+    suspend fun activeModels(): ResponseBody
 
     @GET("api/health/")
     suspend fun health(): HealthDto

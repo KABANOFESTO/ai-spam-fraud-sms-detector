@@ -2,6 +2,9 @@ package com.smsai.smsfrauddetector.data.repository
 
 import android.content.Context
 import android.net.Uri
+import com.google.gson.Gson
+import com.google.gson.JsonParser
+import com.google.gson.reflect.TypeToken
 import com.smsai.smsfrauddetector.BuildConfig
 import com.smsai.smsfrauddetector.core.common.ApiResult
 import com.smsai.smsfrauddetector.core.network.ApiClient
@@ -24,7 +27,6 @@ import com.smsai.smsfrauddetector.data.remote.dto.LoginRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.LogoutRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.ModelDto
 import com.smsai.smsfrauddetector.data.remote.dto.PaginatedResponse
-import com.smsai.smsfrauddetector.data.remote.dto.ProfileUpdateResponseDto
 import com.smsai.smsfrauddetector.data.remote.dto.RegisterRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.ResetPasswordRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.ReportRequestDto
@@ -36,6 +38,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.ResponseBody
 import okio.IOException
 import java.io.File
 
@@ -49,6 +52,8 @@ class AppRepository(
     private val context: Context,
     private val sessionStore: SessionStore,
 ) {
+    private val gson = Gson()
+
     private suspend fun api() = currentSession().let { session ->
         ApiClient.create(
             baseUrl = session.baseUrl ?: BuildConfig.DEFAULT_BASE_URL,
@@ -191,7 +196,7 @@ class AppRepository(
     }
 
     suspend fun history(page: Int = 1, pageSize: Int = 20): ApiResult<PaginatedResponse<AnalysisResultDto>> = call {
-        api().history(page = page, pageSize = pageSize)
+        api().history(page = page, pageSize = pageSize, filters = emptyMap())
     }
 
     suspend fun stats(): ApiResult<StatsDto> = call { api().stats() }
@@ -226,7 +231,13 @@ class AppRepository(
         api().retrain(payload)
     }
 
-    suspend fun activeModels(): ApiResult<List<ModelDto>> = call { api().activeModels() }
+    suspend fun activeModels(): ApiResult<List<ModelDto>> = call {
+        loadActiveModelsSafely()
+    }
+
+    suspend fun currentActiveModel(): ApiResult<ModelDto?> = call {
+        loadActiveModelsSafely().firstOrNull()
+    }
 
     suspend fun health(): ApiResult<HealthDto> = call { api().health() }
 
@@ -301,5 +312,69 @@ class AppRepository(
 
     suspend fun adminDeleteUser(userId: Int): ApiResult<String> = call {
         api().adminDeleteUser(userId).getOrDefault("message", "User deleted successfully.")
+    }
+
+    private fun parseActiveModelsResponse(body: ResponseBody): List<ModelDto> {
+        return try {
+            val raw = body.string().trim()
+            if (raw.isBlank()) return emptyList()
+
+            val element = JsonParser.parseString(raw)
+            val listType = object : TypeToken<List<ModelDto>>() {}.type
+
+            when {
+                element.isJsonArray -> gson.fromJson(element, listType)
+                element.isJsonObject -> {
+                    val objectValue = element.asJsonObject
+                    when {
+                        objectValue.has("results") && objectValue["results"].isJsonArray ->
+                            gson.fromJson(objectValue["results"], listType)
+                        objectValue.has("active_model") && objectValue["active_model"].isJsonObject ->
+                            listOf(gson.fromJson(objectValue["active_model"], ModelDto::class.java))
+                        objectValue.has("model") && objectValue["model"].isJsonObject ->
+                            listOf(gson.fromJson(objectValue["model"], ModelDto::class.java))
+                        objectValue.has("id") ->
+                            listOf(gson.fromJson(element, ModelDto::class.java))
+                        else -> emptyList()
+                    }
+                }
+                else -> emptyList()
+            }
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    private suspend fun loadActiveModelsSafely(): List<ModelDto> {
+        val models = parseActiveModelsResponse(api().activeModels())
+        return if (models.isNotEmpty()) models else loadActiveModelFallback()
+    }
+
+    private suspend fun loadActiveModelFallback(): List<ModelDto> {
+        return try {
+            val activeModel = api().health().activeModel ?: return emptyList()
+            listOf(activeModel.toModelDto())
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    private fun ActiveModelDto.toModelDto(): ModelDto {
+        return ModelDto(
+            id = id,
+            modelName = modelName,
+            version = version,
+            artifactPath = null,
+            trainingDataPath = null,
+            trainingSamples = 0,
+            testSamples = 0,
+            evaluationReport = null,
+            accuracy = accuracy,
+            precision = precision,
+            recall = recall,
+            f1Score = f1Score,
+            trainedAt = trainedAt,
+            isActive = true,
+        )
     }
 }

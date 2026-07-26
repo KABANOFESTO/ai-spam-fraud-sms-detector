@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -126,7 +128,7 @@ fun SettingsScreen(repository: AppRepository) {
 
     val smsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-    ) { granted ->
+    ) { granted -> 
         statusRefresh += 1
         if (granted) {
             evaluateTrackingSetup(
@@ -188,11 +190,28 @@ fun SettingsScreen(repository: AppRepository) {
     val smsPermissionGranted = remember(statusRefresh) { SmsTrackingPermissions.isSmsPermissionGranted(context) }
     val notificationPermissionGranted = remember(statusRefresh) { SmsTrackingPermissions.isNotificationPermissionGranted(context) }
     val trackingReady = remember(statusRefresh) { SmsTrackingPermissions.canTrackAutomatically(context) }
+    val trackingStep = remember(
+        defaultSmsApp,
+        smsPermissionGranted,
+        notificationPermissionGranted,
+        trackingReady,
+        state.smsMonitoring,
+    ) {
+        resolveTrackingStep(
+            defaultSmsApp = defaultSmsApp,
+            smsPermissionGranted = smsPermissionGranted,
+            notificationPermissionGranted = notificationPermissionGranted,
+            trackingReady = trackingReady,
+            smsMonitoringEnabled = state.smsMonitoring,
+        )
+    }
+    val setupButtonLabel = trackingStep.buttonLabel
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -240,6 +259,91 @@ fun SettingsScreen(repository: AppRepository) {
                         text = "For real-time fraud detection, the app must be the default SMS handler, and SMS + notification permissions must be granted.",
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                     )
+
+                    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                StatusBadge(text = "Setup checklist", color = MaterialTheme.colorScheme.secondary)
+                                StatusBadge(
+                                    text = if (trackingReady) "Ready" else "Needs setup",
+                                    color = if (trackingReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                                )
+                            }
+                            Text(
+                                text = when {
+                                    trackingReady -> "Everything required is in place. You can keep monitoring on or refresh status anytime."
+                                    !defaultSmsApp -> "Start by making the app the default SMS handler."
+                                    !smsPermissionGranted -> "Next, let Android grant SMS read access."
+                                    !notificationPermissionGranted -> "Then enable notifications for fraud alerts."
+                                    else -> "Finish by turning on automatic monitoring."
+                                },
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                            )
+                            TrackingChecklistItem(
+                                step = "1",
+                                title = "Set as default SMS app",
+                                done = defaultSmsApp,
+                                active = trackingStep.currentStep == 0,
+                                detail = if (defaultSmsApp) {
+                                    "This device already trusts the app to receive SMS messages."
+                                } else {
+                                    "Tap below to request the SMS role from Android."
+                                },
+                            )
+                            TrackingChecklistItem(
+                                step = "2",
+                                title = "Grant SMS permission",
+                                done = smsPermissionGranted,
+                                active = trackingStep.currentStep == 1,
+                                detail = if (smsPermissionGranted) {
+                                    "The receiver can now read incoming SMS bodies."
+                                } else {
+                                    "Android must allow RECEIVE_SMS before monitoring can start."
+                                },
+                            )
+                            TrackingChecklistItem(
+                                step = "3",
+                                title = "Enable notifications",
+                                done = notificationPermissionGranted,
+                                active = trackingStep.currentStep == 2,
+                                detail = if (notificationPermissionGranted) {
+                                    "Fraud alerts can now appear instantly on the device."
+                                } else {
+                                    "Notification access is required for suspicious SMS alerts."
+                                },
+                            )
+                            TrackingChecklistItem(
+                                step = "4",
+                                title = "Turn on automatic monitoring",
+                                done = state.smsMonitoring && trackingReady,
+                                active = trackingStep.currentStep == 3,
+                                detail = when {
+                                    state.smsMonitoring && trackingReady -> "Monitoring is active and ready for live analysis."
+                                    state.smsMonitoring -> "The switch is on, but the device still needs permissions."
+                                    else -> "Once the steps above are complete, enable tracking."
+                                },
+                            )
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        PrimaryButton(
+                            text = setupButtonLabel,
+                            modifier = Modifier.weight(1f),
+                            trailingIcon = true,
+                            enabled = !trackingReady || !state.smsMonitoring,
+                            onClick = {
+                                startAutomaticTrackingSetup(
+                                    context = context,
+                                    viewModel = viewModel,
+                                    defaultSmsLauncher = defaultSmsLauncher,
+                                    smsPermissionLauncher = smsPermissionLauncher,
+                                    notificationPermissionLauncher = notificationPermissionLauncher,
+                                    onStatus = { trackingStatusMessage = it },
+                                )
+                            },
+                        )
+                    }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatusBadge(
@@ -388,5 +492,78 @@ private fun RowSetting(title: String, checked: Boolean, onCheckedChange: (Boolea
     ) {
         Text(title)
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun TrackingChecklistItem(
+    step: String,
+    title: String,
+    done: Boolean,
+    active: Boolean,
+    detail: String,
+) {
+    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+        ) {
+            StatusBadge(
+                text = step,
+                color = when {
+                    done -> MaterialTheme.colorScheme.primary
+                    active -> MaterialTheme.colorScheme.secondary
+                    else -> MaterialTheme.colorScheme.tertiary
+                },
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = if (active || done) FontWeight.Bold else FontWeight.SemiBold,
+                )
+                Text(
+                    text = detail,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                )
+            }
+            StatusBadge(
+                text = when {
+                    done -> "Done"
+                    active -> "Next"
+                    else -> "Pending"
+                },
+                color = when {
+                    done -> MaterialTheme.colorScheme.primary
+                    active -> MaterialTheme.colorScheme.secondary
+                    else -> MaterialTheme.colorScheme.error
+                },
+            )
+        }
+    }
+}
+
+private data class TrackingStepState(
+    val currentStep: Int,
+    val buttonLabel: String,
+)
+
+private fun resolveTrackingStep(
+    defaultSmsApp: Boolean,
+    smsPermissionGranted: Boolean,
+    notificationPermissionGranted: Boolean,
+    trackingReady: Boolean,
+    smsMonitoringEnabled: Boolean,
+): TrackingStepState {
+    return when {
+        trackingReady && smsMonitoringEnabled -> TrackingStepState(currentStep = 3, buttonLabel = "Monitoring ready")
+        trackingReady -> TrackingStepState(currentStep = 3, buttonLabel = "Enable monitoring")
+        !defaultSmsApp -> TrackingStepState(currentStep = 0, buttonLabel = "Set default SMS app")
+        !smsPermissionGranted -> TrackingStepState(currentStep = 1, buttonLabel = "Grant SMS access")
+        !notificationPermissionGranted -> TrackingStepState(currentStep = 2, buttonLabel = "Enable notifications")
+        else -> TrackingStepState(currentStep = 3, buttonLabel = "Continue setup")
     }
 }

@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,6 +56,7 @@ import com.smsai.smsfrauddetector.core.navigation.AppRoute
 import com.smsai.smsfrauddetector.data.remote.dto.DatasetDto
 import com.smsai.smsfrauddetector.data.remote.dto.DashboardResponseDto
 import com.smsai.smsfrauddetector.data.remote.dto.EvaluationReportDto
+import com.smsai.smsfrauddetector.data.remote.dto.ActiveModelDto
 import com.smsai.smsfrauddetector.data.remote.dto.ModelDto
 import com.smsai.smsfrauddetector.data.remote.dto.StatsDto
 import com.smsai.smsfrauddetector.data.repository.AppRepository
@@ -71,6 +74,7 @@ data class DashboardUiState(
     val viewerRole: String? = null,
     val stats: StatsDto? = null,
     val dashboard: DashboardResponseDto? = null,
+    val activeModel: ModelDto? = null,
     val evaluation: EvaluationReportDto? = null,
     val datasets: List<DatasetDto> = emptyList(),
     val models: List<ModelDto> = emptyList(),
@@ -92,6 +96,7 @@ class DashboardViewModel(private val repository: AppRepository) : ViewModel() {
             val evaluationResult = if (isAdmin) repository.evaluation() else null
             val datasetsResult = if (isAdmin) repository.datasets() else null
             val modelsResult = repository.activeModels()
+            val activeModelResult = repository.currentActiveModel()
 
             val dashboard = when (dashboardResult) {
                 is ApiResult.Success -> dashboardResult.data
@@ -113,6 +118,10 @@ class DashboardViewModel(private val repository: AppRepository) : ViewModel() {
                 is ApiResult.Success -> modelsResult.data
                 else -> emptyList()
             }
+            val activeModel = when (activeModelResult) {
+                is ApiResult.Success -> activeModelResult.data
+                else -> dashboard?.activeModel?.toModelDto()
+            }
             val error = listOfNotNull(
                 dashboardResult.takeIf { it is ApiResult.Error }?.let { (it as ApiResult.Error).message },
                 statsResult.takeIf { it is ApiResult.Error }?.let { (it as ApiResult.Error).message },
@@ -125,6 +134,7 @@ class DashboardViewModel(private val repository: AppRepository) : ViewModel() {
                 viewerRole = session.user?.role,
                 stats = stats,
                 dashboard = dashboard,
+                activeModel = activeModel,
                 evaluation = evaluation,
                 datasets = datasets,
                 models = models,
@@ -155,6 +165,25 @@ class DashboardViewModel(private val repository: AppRepository) : ViewModel() {
             }
         }
     }
+}
+
+private fun ActiveModelDto.toModelDto(): ModelDto {
+    return ModelDto(
+        id = id,
+        modelName = modelName,
+        version = version,
+        artifactPath = artifactPath,
+        trainingDataPath = null,
+        trainingSamples = 0,
+        testSamples = 0,
+        evaluationReport = null,
+        accuracy = accuracy,
+        precision = precision,
+        recall = recall,
+        f1Score = f1Score,
+        trainedAt = trainedAt,
+        isActive = true,
+    )
 }
 
 @Composable
@@ -194,7 +223,13 @@ fun DashboardScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
             Text(
                 text = if (isAdmin) "Admin dashboard" else "User dashboard",
                 style = MaterialTheme.typography.headlineSmall,
@@ -256,7 +291,7 @@ fun DashboardScreen(
                 }
             }
 
-            if (isAdmin && state.dashboard?.activeModel == null && !state.loading) {
+            if (isAdmin && state.activeModel == null && !state.loading) {
                 NoActiveModelCard(
                     hasDatasets = state.datasets.isNotEmpty(),
                     hasModels = state.models.isNotEmpty(),
