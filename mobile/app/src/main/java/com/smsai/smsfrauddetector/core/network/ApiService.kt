@@ -1,6 +1,9 @@
 package com.smsai.smsfrauddetector.core.network
 
 import com.smsai.smsfrauddetector.data.remote.dto.ActiveModelDto
+import com.smsai.smsfrauddetector.data.remote.dto.AdminUserCreateRequestDto
+import com.smsai.smsfrauddetector.data.remote.dto.AdminUserCreateResponseDto
+import com.smsai.smsfrauddetector.data.remote.dto.AdminUserMutationResponseDto
 import com.smsai.smsfrauddetector.data.remote.dto.AnalysisResultDto
 import com.smsai.smsfrauddetector.data.remote.dto.AnalyzeRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.AuthResponseDto
@@ -10,10 +13,12 @@ import com.smsai.smsfrauddetector.data.remote.dto.EvaluationReportDto
 import com.smsai.smsfrauddetector.data.remote.dto.FraudReportDto
 import com.smsai.smsfrauddetector.data.remote.dto.HealthDto
 import com.smsai.smsfrauddetector.data.remote.dto.LoginRequestDto
+import com.smsai.smsfrauddetector.data.remote.dto.ForgotPasswordRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.LogoutRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.ModelDto
 import com.smsai.smsfrauddetector.data.remote.dto.PaginatedResponse
 import com.smsai.smsfrauddetector.data.remote.dto.ProfileUpdateResponseDto
+import com.smsai.smsfrauddetector.data.remote.dto.ResetPasswordRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.RegisterResponseDto
 import com.smsai.smsfrauddetector.data.remote.dto.RegisterRequestDto
 import com.smsai.smsfrauddetector.data.remote.dto.ReportRequestDto
@@ -22,6 +27,7 @@ import com.smsai.smsfrauddetector.data.remote.dto.UserDto
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.FieldMap
 import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
@@ -46,8 +52,32 @@ interface ApiService {
     @POST("api/auth/logout/")
     suspend fun logout(@Body request: LogoutRequestDto): Map<String, String>
 
+    @POST("api/auth/forgot-password/")
+    suspend fun forgotPassword(@Body request: ForgotPasswordRequestDto): Map<String, String>
+
+    @POST("api/auth/reset-password/")
+    suspend fun resetPassword(@Body request: ResetPasswordRequestDto): Map<String, String>
+
     @GET("api/auth/me/")
     suspend fun me(): UserDto
+
+    @GET("api/auth/users/")
+    suspend fun users(): List<UserDto>
+
+    @POST("api/auth/admin/users/create/")
+    suspend fun adminCreateUser(@Body request: AdminUserCreateRequestDto): AdminUserCreateResponseDto
+
+    @PATCH("api/auth/admin/users/{pk}/update/")
+    suspend fun adminUpdateUser(
+        @Path("pk") userId: Int,
+        @Body request: Map<String, @JvmSuppressWildcards Any>,
+    ): AdminUserMutationResponseDto
+
+    @PATCH("api/auth/admin/users/{pk}/toggle-active/")
+    suspend fun adminToggleUser(@Path("pk") userId: Int): AdminUserMutationResponseDto
+
+    @DELETE("api/auth/admin/users/{pk}/delete/")
+    suspend fun adminDeleteUser(@Path("pk") userId: Int): Map<String, String>
 
     @Multipart
     @PATCH("api/auth/update-profile/")

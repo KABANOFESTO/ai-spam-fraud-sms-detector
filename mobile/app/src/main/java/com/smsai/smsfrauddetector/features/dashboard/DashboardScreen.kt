@@ -44,16 +44,19 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.smsai.smsfrauddetector.core.common.ApiResult
 import com.smsai.smsfrauddetector.core.common.SimpleViewModelFactory
 import com.smsai.smsfrauddetector.core.designsystem.components.BannerTone
+import com.smsai.smsfrauddetector.core.designsystem.components.ActionCard
 import com.smsai.smsfrauddetector.core.designsystem.components.ErrorStateCard
 import com.smsai.smsfrauddetector.core.designsystem.components.FeedbackBanner
 import com.smsai.smsfrauddetector.core.designsystem.components.MetricCard
 import com.smsai.smsfrauddetector.core.designsystem.components.PrimaryButton
 import com.smsai.smsfrauddetector.core.designsystem.components.StatusBadge
 import com.smsai.smsfrauddetector.core.designsystem.components.SurfaceCard
+import com.smsai.smsfrauddetector.core.navigation.AppRoute
 import com.smsai.smsfrauddetector.data.remote.dto.DatasetDto
 import com.smsai.smsfrauddetector.data.remote.dto.DashboardResponseDto
 import com.smsai.smsfrauddetector.data.remote.dto.EvaluationReportDto
 import com.smsai.smsfrauddetector.data.remote.dto.ModelDto
+import com.smsai.smsfrauddetector.data.remote.dto.StatsDto
 import com.smsai.smsfrauddetector.data.repository.AppRepository
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -66,6 +69,8 @@ import kotlinx.coroutines.launch
 
 data class DashboardUiState(
     val loading: Boolean = true,
+    val viewerRole: String? = null,
+    val stats: StatsDto? = null,
     val dashboard: DashboardResponseDto? = null,
     val evaluation: EvaluationReportDto? = null,
     val datasets: List<DatasetDto> = emptyList(),
@@ -81,13 +86,20 @@ class DashboardViewModel(private val repository: AppRepository) : ViewModel() {
     fun load() {
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
-            val dashboardResult = repository.dashboard()
-            val evaluationResult = repository.evaluation()
-            val datasetsResult = repository.datasets()
+            val session = repository.currentSession()
+            val isAdmin = session.user?.role.equals("Admin", ignoreCase = true)
+            val statsResult = repository.stats()
+            val dashboardResult = if (isAdmin) repository.dashboard() else null
+            val evaluationResult = if (isAdmin) repository.evaluation() else null
+            val datasetsResult = if (isAdmin) repository.datasets() else null
             val modelsResult = repository.activeModels()
 
             val dashboard = when (dashboardResult) {
                 is ApiResult.Success -> dashboardResult.data
+                else -> null
+            }
+            val stats = when (statsResult) {
+                is ApiResult.Success -> statsResult.data
                 else -> null
             }
             val evaluation = when (evaluationResult) {
@@ -104,12 +116,15 @@ class DashboardViewModel(private val repository: AppRepository) : ViewModel() {
             }
             val error = listOfNotNull(
                 dashboardResult.takeIf { it is ApiResult.Error }?.let { (it as ApiResult.Error).message },
-                evaluationResult.takeIf { it is ApiResult.Error }?.let { (it as ApiResult.Error).message },
+                statsResult.takeIf { it is ApiResult.Error }?.let { (it as ApiResult.Error).message },
+                evaluationResult.takeIf { it is ApiResult.Error && it.code != 404 }?.let { (it as ApiResult.Error).message },
                 datasetsResult.takeIf { it is ApiResult.Error }?.let { (it as ApiResult.Error).message },
                 modelsResult.takeIf { it is ApiResult.Error }?.let { (it as ApiResult.Error).message },
             ).firstOrNull()
             _state.value = DashboardUiState(
                 loading = false,
+                viewerRole = session.user?.role,
+                stats = stats,
                 dashboard = dashboard,
                 evaluation = evaluation,
                 datasets = datasets,
@@ -144,12 +159,16 @@ class DashboardViewModel(private val repository: AppRepository) : ViewModel() {
 }
 
 @Composable
-fun DashboardScreen(repository: AppRepository) {
+fun DashboardScreen(
+    repository: AppRepository,
+    onNavigate: (String) -> Unit = {},
+) {
     val viewModel: DashboardViewModel = viewModel(
         factory = remember(repository) { SimpleViewModelFactory { DashboardViewModel(repository) } },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val isAdmin = state.viewerRole.equals("Admin", ignoreCase = true)
     var datasetId by rememberSaveable { mutableStateOf("") }
     var dataPath by rememberSaveable { mutableStateOf("") }
     var notes by rememberSaveable { mutableStateOf("") }
@@ -177,73 +196,164 @@ fun DashboardScreen(repository: AppRepository) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(text = "Admin dashboard", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(text = "Track models, datasets, evaluation results, and retraining actions.")
+            Text(
+                text = if (isAdmin) "Admin dashboard" else "User dashboard",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = if (isAdmin) {
+                    "Track models, datasets, evaluation results, and retraining actions."
+                } else {
+                    "Review your SMS protection status, recent usage, and model readiness."
+                },
+            )
+
+            if (isAdmin) {
+                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatusBadge(text = "Admin workflow", color = MaterialTheme.colorScheme.primary)
+                        Text(text = "1. Import a labeled CSV dataset")
+                        Text(text = "2. Start retraining with that dataset")
+                        Text(text = "3. Review evaluation metrics and activate the model")
+                    }
+                }
+                ActionCard(
+                    title = "Manage users",
+                    subtitle = "Create, activate, deactivate, and delete accounts",
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onNavigate(AppRoute.AdminUsers.route) },
+                )
+            } else {
+                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatusBadge(text = "Personal view", color = MaterialTheme.colorScheme.secondary)
+                        Text(text = "Your dashboard is ready to use for live SMS monitoring and analysis.")
+                        Text(text = "Open Analyze or History to review suspicious messages and saved results.")
+                    }
+                }
+            }
+
             if (state.loading) CircularProgressIndicator()
             state.error?.let { ErrorStateCard(message = it, retryText = "Reload dashboard", onRetry = { viewModel.load() }) }
 
-            state.dashboard?.let { dashboard ->
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    MetricCard("Total", dashboard.totals.totalAnalyses.toString(), "Analyses", modifier = Modifier.weight(1f))
-                    MetricCard("Suspicious", dashboard.totals.suspiciousCount.toString(), "Flagged", modifier = Modifier.weight(1f))
-                }
-            }
-            state.evaluation?.let { evaluation ->
-                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        StatusBadge(text = "Evaluation", color = MaterialTheme.colorScheme.secondary)
-                        Text(text = "${evaluation.modelName} v${evaluation.version}", fontWeight = FontWeight.Bold)
-                        Text(text = "Accuracy ${(evaluation.accuracy * 100).toInt()}% | F1 ${(evaluation.f1Score * 100).toInt()}%")
-                        Text(text = "Train ${evaluation.trainingSamples} | Test ${evaluation.testSamples}")
-                    }
-                }
-            }
-
-            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(text = "Import dataset", style = MaterialTheme.typography.titleLarge)
-                    OutlinedTextField(value = notes, onValueChange = { notes = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Notes") })
-                    PrimaryButton(text = "Pick file", onClick = { picker.launch(arrayOf("text/*", "application/*")) })
-                    PrimaryButton(
-                        text = "Upload dataset",
-                        onClick = {
-                            val uri = selectedUri ?: return@PrimaryButton
-                            val part = uriToMultipart(context, uri)
-                            viewModel.importDataset(part, notes)
-                        },
-                        enabled = selectedUri != null,
-                    )
-                }
-            }
-
-            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(text = "Retrain model", style = MaterialTheme.typography.titleLarge)
-                    OutlinedTextField(value = datasetId, onValueChange = { datasetId = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Dataset ID (optional)") })
-                    OutlinedTextField(value = dataPath, onValueChange = { dataPath = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Data path (optional)") })
+            if (isAdmin) {
+                state.dashboard?.let { dashboard ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        Text(text = "Force retrain", modifier = Modifier.weight(1f))
-                        androidx.compose.material3.Switch(checked = force, onCheckedChange = { force = it })
+                        MetricCard("Total", dashboard.totals.totalAnalyses.toString(), "Analyses", modifier = Modifier.weight(1f))
+                        MetricCard("Suspicious", dashboard.totals.suspiciousCount.toString(), "Flagged", modifier = Modifier.weight(1f))
                     }
-                    PrimaryButton(text = "Start retraining", onClick = {
-                        viewModel.retrain(
-                            datasetId = datasetId.toIntOrNull(),
-                            dataPath = dataPath.ifBlank { null },
-                            force = force,
-                        )
-                    })
+                }
+            } else {
+                state.stats?.let { stats ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        MetricCard("Total", stats.totalAnalyses.toString(), "Analyses", modifier = Modifier.weight(1f))
+                        MetricCard("Suspicious", stats.suspiciousCount.toString(), "Flagged", modifier = Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        MetricCard("Confidence", "${(stats.averageConfidence * 100).toInt()}%", "Avg certainty", modifier = Modifier.weight(1f))
+                        MetricCard("Rate", "${(stats.suspiciousRate * 100).toInt()}%", "Suspicious rate", modifier = Modifier.weight(1f))
+                    }
                 }
             }
 
-            Text(text = "Datasets", style = MaterialTheme.typography.titleLarge)
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(state.datasets) { dataset ->
+            if (isAdmin && state.dashboard?.activeModel == null && !state.loading) {
+                ErrorStateCard(
+                    message = "No active model is available yet. Import a dataset and run retraining to publish the first model.",
+                    retryText = "Reload dashboard",
+                    onRetry = { viewModel.load() },
+                )
+            }
+            if (isAdmin) {
+                state.evaluation?.let { evaluation ->
                     SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(dataset.originalFilename, fontWeight = FontWeight.Bold)
-                            Text("Rows: ${dataset.rowCount}")
-                            Text(dataset.notes.ifBlank { "No notes" })
+                        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            StatusBadge(text = "Evaluation", color = MaterialTheme.colorScheme.secondary)
+                            Text(text = "${evaluation.modelName} v${evaluation.version}", fontWeight = FontWeight.Bold)
+                            Text(text = "Accuracy ${(evaluation.accuracy * 100).toInt()}% | F1 ${(evaluation.f1Score * 100).toInt()}%")
+                            Text(text = "Train ${evaluation.trainingSamples} | Test ${evaluation.testSamples}")
                         }
+                    }
+                }
+            }
+            if (isAdmin && state.models.isNotEmpty()) {
+                Text(text = "Active models", style = MaterialTheme.typography.titleLarge)
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(state.models) { model ->
+                        SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                StatusBadge(
+                                    text = if (model.isActive) "Active" else "Archived",
+                                    color = if (model.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                                )
+                                Text("${model.modelName} v${model.version}", fontWeight = FontWeight.Bold)
+                                Text("Accuracy ${(model.accuracy * 100).toInt()}% | F1 ${(model.f1Score * 100).toInt()}%")
+                                Text(model.trainingDataPath ?: "Training data not recorded")
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (isAdmin) {
+                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(text = "Import dataset", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            text = "Upload a labeled CSV with message/text and label/category columns. Valid labels: legitimate, spam, or fraud.",
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                        )
+                        OutlinedTextField(value = notes, onValueChange = { notes = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Notes") })
+                        PrimaryButton(text = "Pick file", onClick = { picker.launch(arrayOf("text/*", "application/*")) })
+                        PrimaryButton(
+                            text = "Upload dataset",
+                            onClick = {
+                                val uri = selectedUri ?: return@PrimaryButton
+                                val part = uriToMultipart(context, uri)
+                                viewModel.importDataset(part, notes)
+                            },
+                            enabled = selectedUri != null,
+                        )
+                    }
+                }
+
+                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(text = "Retrain model", style = MaterialTheme.typography.titleLarge)
+                        OutlinedTextField(value = datasetId, onValueChange = { datasetId = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Dataset ID (optional)") })
+                        OutlinedTextField(value = dataPath, onValueChange = { dataPath = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Data path (optional)") })
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                            Text(text = "Force retrain", modifier = Modifier.weight(1f))
+                            androidx.compose.material3.Switch(checked = force, onCheckedChange = { force = it })
+                        }
+                        PrimaryButton(text = "Start retraining", onClick = {
+                            viewModel.retrain(
+                                datasetId = datasetId.toIntOrNull(),
+                                dataPath = dataPath.ifBlank { null },
+                                force = force,
+                            )
+                        })
+                    }
+                }
+
+                Text(text = "Datasets", style = MaterialTheme.typography.titleLarge)
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(state.datasets) { dataset ->
+                        SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(dataset.originalFilename, fontWeight = FontWeight.Bold)
+                                Text("Rows: ${dataset.rowCount}")
+                                Text(dataset.notes.ifBlank { "No notes" })
+                            }
+                        }
+                    }
+                }
+            } else {
+                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(text = "What you can do", style = MaterialTheme.typography.titleLarge)
+                        Text(text = "Analyze SMS messages, review history, and keep automatic tracking enabled for real-time protection.")
+                        StatusBadge(text = "Use Home for analysis and history", color = MaterialTheme.colorScheme.tertiary)
                     }
                 }
             }

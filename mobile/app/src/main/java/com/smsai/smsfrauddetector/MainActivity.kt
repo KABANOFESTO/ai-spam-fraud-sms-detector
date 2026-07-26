@@ -25,13 +25,14 @@ class MainActivity : ComponentActivity() {
             val sessionState = app.container.sessionStoreRef.sessionFlow.collectAsStateWithLifecycle(
                 initialValue = SessionSnapshot(),
             )
-            SmsFraudTheme(darkTheme = sessionState.value.darkMode, dynamicColor = true) {
-                AppNavGraph(
-                    repository = app.container.repository,
-                    launchRoute = launchRoute,
-                    onLaunchRouteConsumed = { launchRoute = null },
-                )
-            }
+                SmsFraudTheme(darkTheme = sessionState.value.darkMode, dynamicColor = true) {
+                    AppNavGraph(
+                        repository = app.container.repository,
+                        currentUserRole = sessionState.value.user?.role,
+                        launchRoute = launchRoute,
+                        onLaunchRouteConsumed = { launchRoute = null },
+                    )
+                }
         }
     }
 
@@ -41,7 +42,22 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun resolveLaunchRoute(intent: Intent?) {
-        val route = intent?.getStringExtra(AppLaunchDestination.EXTRA_ROUTE)
-        launchRoute = route?.takeIf { it == AppRoute.History.route }
+        val extraRoute = intent?.getStringExtra(AppLaunchDestination.EXTRA_ROUTE)
+        val deepLinkRoute = intent?.data?.let { uri ->
+            val segments = uri.pathSegments
+            when {
+                uri.host == "reset-password" && segments.size >= 2 -> {
+                    AppRoute.resetPassword(segments[0], segments[1])
+                }
+                segments.size >= 3 && segments[0] == "reset-password" -> {
+                    AppRoute.resetPassword(segments[1], segments[2])
+                }
+                else -> null
+            }
+        }
+        val route = extraRoute ?: deepLinkRoute
+        launchRoute = route?.takeIf {
+            it == AppRoute.History.route || it.startsWith("reset-password/")
+        }
     }
 }

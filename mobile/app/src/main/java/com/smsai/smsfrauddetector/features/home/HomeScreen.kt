@@ -54,6 +54,7 @@ fun HomeScreen(
         factory = remember(repository) { SimpleViewModelFactory { HomeViewModel(repository) } },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val isAdmin = state.user?.role.equals("Admin", ignoreCase = true)
     var bannerMessage by remember { mutableStateOf<String?>(null) }
     var bannerTone by remember { mutableStateOf(BannerTone.Info) }
 
@@ -69,14 +70,14 @@ fun HomeScreen(
         }
 
         bannerMessage = when {
-            state.error != null -> state.error
+            state.error != null && health == null -> state.error
             health?.status?.equals("ok", true) == true && health.modelReady -> "Secure backend connected and AI model ready."
             health?.status?.equals("ok", true) == true -> "Backend connected. Model status is loading."
             else -> "Backend is currently offline."
         }
 
         bannerTone = when {
-            state.error != null -> BannerTone.Error
+            state.error != null && health == null -> BannerTone.Error
             health?.status?.equals("ok", true) == true && health.modelReady -> BannerTone.Success
             health?.status?.equals("ok", true) == true -> BannerTone.Info
             else -> BannerTone.Error
@@ -129,7 +130,15 @@ fun HomeScreen(
                     }
                 }
 
-                state.error?.let {
+                if (isAdmin && state.activeModel == null) {
+                    ErrorStateCard(
+                        message = "No active AI model is deployed yet. Open Admin dashboard to import a labeled CSV dataset and train the first model.",
+                        retryText = "Open admin tools",
+                        onRetry = { onNavigate(AppRoute.Dashboard.route) },
+                    )
+                }
+
+                state.error?.takeIf { state.health == null }?.let {
                     ErrorStateCard(
                         message = it,
                         retryText = "Reload home",
@@ -164,7 +173,11 @@ fun HomeScreen(
                         MetricCard(
                             title = "Backend",
                             value = if (state.health?.status?.equals("ok", true) == true) "Online" else "Offline",
-                            subtitle = state.health?.service ?: "Service status",
+                            subtitle = if (state.health?.modelReady == true) {
+                                "Model ready"
+                            } else {
+                                "Model pending"
+                            },
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -174,10 +187,13 @@ fun HomeScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     ActionCard("Analyze SMS", "Classify a message immediately", modifier = Modifier.fillMaxWidth(), onClick = { onNavigate(AppRoute.Analyze.route) })
                     ActionCard("History", "Review previous predictions", modifier = Modifier.fillMaxWidth(), onClick = { onNavigate(AppRoute.History.route) })
+                    ActionCard("Dashboard", if (isAdmin) "Open admin analytics and model tools" else "View your personal dashboard", modifier = Modifier.fillMaxWidth(), onClick = { onNavigate(AppRoute.Dashboard.route) })
+                    if (isAdmin) {
+                        ActionCard("Users", "Create, activate, or remove accounts", modifier = Modifier.fillMaxWidth(), onClick = { onNavigate(AppRoute.AdminUsers.route) })
+                    }
                     ActionCard("Reports", "Escalate suspicious content", modifier = Modifier.fillMaxWidth(), onClick = { onNavigate(AppRoute.Report.route) })
                     ActionCard("Profile", "Update your account details", modifier = Modifier.fillMaxWidth(), onClick = { onNavigate(AppRoute.Profile.route) })
                     ActionCard("Settings", "Tune backend and monitoring", modifier = Modifier.fillMaxWidth(), onClick = { onNavigate(AppRoute.Settings.route) })
-                    ActionCard("Admin dashboard", "Monitor models and datasets", modifier = Modifier.fillMaxWidth(), onClick = { onNavigate(AppRoute.Dashboard.route) })
                 }
 
                 SurfaceCard(modifier = Modifier.fillMaxWidth()) {

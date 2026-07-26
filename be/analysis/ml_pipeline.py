@@ -17,11 +17,18 @@ from sklearn.pipeline import Pipeline
 
 
 LABEL_ALIASES = {
+    "0": "LEGITIMATE",
     "legitimate": "LEGITIMATE",
+    "legit": "LEGITIMATE",
     "ham": "LEGITIMATE",
     "normal": "LEGITIMATE",
+    "safe": "LEGITIMATE",
+    "non-spam": "LEGITIMATE",
+    "not spam": "LEGITIMATE",
+    "1": "SPAM",
     "spam": "SPAM",
     "junk": "SPAM",
+    "advertisement": "SPAM",
     "fraud": "FRAUD",
     "phishing": "FRAUD",
     "scam": "FRAUD",
@@ -74,8 +81,22 @@ def load_training_frame(path: str | Path) -> pd.DataFrame:
 
     header = [column.strip() for column in rows[0]]
     header_lookup = {column.lower(): index for index, column in enumerate(header)}
-    text_index = next((header_lookup[key] for key in ("message", "text", "sms") if key in header_lookup), None)
-    label_index = next((header_lookup[key] for key in ("label", "category", "class") if key in header_lookup), None)
+    text_index = next(
+        (
+            header_lookup[key]
+            for key in ("message", "message_text", "text", "sms", "sms_message", "content", "body", "v1")
+            if key in header_lookup
+        ),
+        None,
+    )
+    label_index = next(
+        (
+            header_lookup[key]
+            for key in ("label", "category", "class", "target", "spam_label", "fraud_label", "sentiment", "v2")
+            if key in header_lookup
+        ),
+        None,
+    )
 
     if text_index is None or label_index is None:
         raise ValueError("Training data must contain message/text and label/category columns.")
