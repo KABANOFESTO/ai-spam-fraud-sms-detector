@@ -46,13 +46,13 @@ import com.smsai.smsfrauddetector.core.designsystem.components.FeedbackBanner
 import com.smsai.smsfrauddetector.core.designsystem.components.PrimaryButton
 import com.smsai.smsfrauddetector.core.designsystem.components.StatusBadge
 import com.smsai.smsfrauddetector.core.designsystem.components.SurfaceCard
+import com.smsai.smsfrauddetector.core.utils.toSafePercent
 import com.smsai.smsfrauddetector.data.remote.dto.AnalysisResultDto
 import com.smsai.smsfrauddetector.data.repository.AppRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 data class AnalysisUiState(
     val loading: Boolean = false,
@@ -206,7 +206,7 @@ fun AnalysisScreen(
                             text = result.prediction.uppercase(),
                             color = if (result.isSuspicious) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                         )
-                        Text(text = "Confidence ${(result.confidence * 100).roundToInt()}%", style = MaterialTheme.typography.headlineMedium)
+                        Text(text = "Confidence ${result.confidence.toSafePercent()}", style = MaterialTheme.typography.headlineMedium)
                         Text(text = result.explanation ?: "Model analysis completed successfully.")
                         Text(text = "Matched signals", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

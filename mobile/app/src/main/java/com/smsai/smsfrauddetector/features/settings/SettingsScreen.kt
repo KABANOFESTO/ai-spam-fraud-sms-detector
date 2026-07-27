@@ -56,6 +56,7 @@ data class SettingsUiState(
     val baseUrl: String = "",
     val darkMode: Boolean = true,
     val smsMonitoring: Boolean = false,
+    val isAdmin: Boolean = false,
     val error: String? = null,
 )
 
@@ -66,10 +67,12 @@ class SettingsViewModel(private val repository: AppRepository) : ViewModel() {
     fun load() {
         viewModelScope.launch {
             try {
+                val session = repository.currentSession()
                 _state.value = SettingsUiState(
                     baseUrl = repository.currentBaseUrl(),
                     darkMode = repository.currentDarkMode(),
                     smsMonitoring = repository.currentSmsMonitoring(),
+                    isAdmin = session.user?.role.equals("Admin", ignoreCase = true),
                 )
             } catch (_: Throwable) {
                 _state.value = _state.value.copy(error = "Unable to load settings.")
@@ -234,21 +237,36 @@ fun SettingsScreen(repository: AppRepository) {
                 ErrorStateCard(message = it, retryText = "Reload settings", onRetry = { viewModel.load() })
             }
 
-            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(text = "Core app settings", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        text = "These values are saved locally and used by the app to reach the live backend.",
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                    )
-                    OutlinedTextField(
-                        value = baseUrl,
-                        onValueChange = { baseUrl = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Backend base URL") },
-                    )
-                    RowSetting("Dark mode", darkMode) { darkMode = it }
-                    PrimaryButton(text = "Save settings", onClick = { viewModel.save(baseUrl, darkMode) })
+            if (state.isAdmin) {
+                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(text = "Admin configuration", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = "Only administrators can change backend connection settings. Users will always use the live deployed backend automatically.",
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                        )
+                        OutlinedTextField(
+                            value = baseUrl,
+                            onValueChange = { baseUrl = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Backend base URL") },
+                        )
+                        RowSetting("Dark mode", darkMode) { darkMode = it }
+                        PrimaryButton(text = "Save settings", onClick = { viewModel.save(baseUrl, darkMode) })
+                    }
+                }
+            } else {
+                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatusBadge(text = "User settings", color = MaterialTheme.colorScheme.primary)
+                        Text(text = "Personal preferences", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = "Your app is already connected to the live backend. You can only adjust local preferences like appearance and tracking state here.",
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                        )
+                        RowSetting("Dark mode", darkMode) { darkMode = it }
+                        PrimaryButton(text = "Save settings", onClick = { viewModel.save(baseUrl, darkMode) })
+                    }
                 }
             }
 
@@ -346,7 +364,7 @@ fun SettingsScreen(repository: AppRepository) {
                         )
                     }
 
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatusBadge(
                             text = if (defaultSmsApp) "Default SMS app" else "Not default",
                             color = if (defaultSmsApp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,

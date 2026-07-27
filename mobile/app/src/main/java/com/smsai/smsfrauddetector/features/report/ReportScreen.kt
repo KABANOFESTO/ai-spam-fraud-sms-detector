@@ -55,7 +55,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -229,12 +231,46 @@ fun ReportScreen(repository: AppRepository) {
                         }
                         Text(
                             text = if (isAdmin) {
-                                "Admin exports include review totals, backlog counts, and the latest reports."
+                                "Admin exports include review totals, backlog counts, and the latest system activity."
                             } else {
-                                "User exports include your submitted reports and their current review outcomes."
+                                "User exports include your activity history and current review outcomes."
                             },
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                         )
+                    }
+                }
+            }
+
+            item {
+                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        StatusBadge(
+                            text = if (isAdmin) "Automatic system activity" else "Automatic personal activity",
+                            color = MaterialTheme.colorScheme.secondary,
+                        )
+                        Text(
+                            text = if (isAdmin) "Live activity feed" else "Your activity feed",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = if (isAdmin) {
+                                "This feed is populated automatically from the backend and shows the latest review and analysis actions across the platform."
+                            } else {
+                                "This feed is populated automatically from the backend and shows the latest analysis and report activity for your account."
+                            },
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                        )
+                        if (state.reports.isEmpty()) {
+                            Text(
+                                text = "No activity records are available yet.",
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                            )
+                        } else {
+                            state.reports.take(3).forEach { report ->
+                                ActivityPreviewRow(report = report, isAdmin = isAdmin)
+                            }
+                        }
                     }
                 }
             }
@@ -248,7 +284,7 @@ fun ReportScreen(repository: AppRepository) {
             item {
                 Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = if (isAdmin) "All reports" else "My reports",
+                        text = if (isAdmin) "System activity" else "My activity",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -262,8 +298,8 @@ fun ReportScreen(repository: AppRepository) {
             if (state.reports.isEmpty()) {
                 item {
                     EmptyReportCard(
-                        title = if (isAdmin) "No reports found yet" else "You have not submitted a report yet",
-                        subtitle = if (isAdmin) "When users submit reports, they will appear here for review and export." else "Any reports you submit or receive review on will appear here automatically.",
+                        title = if (isAdmin) "No system activity found yet" else "No personal activity found yet",
+                        subtitle = if (isAdmin) "When users submit reports or the backend records review actions, they will appear here automatically." else "Any messages you analyze or reports you submit will appear here automatically.",
                     )
                 }
             } else {
@@ -515,7 +551,7 @@ private fun ReportCard(report: FraudReportDto, isAdmin: Boolean) {
             }
 
             Text(
-                text = report.reviewedAt ?: report.createdAt ?: "Pending review",
+                text = formatFriendlyTimestamp(report.reviewedAt ?: report.createdAt),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.64f),
             )
@@ -556,3 +592,85 @@ private fun reportStatusColor(status: String) = when (status.uppercase(Locale.ge
 }
 
 private fun Int?.orZero(): Int = this ?: 0
+
+@Composable
+private fun ActivityPreviewRow(report: FraudReportDto, isAdmin: Boolean) {
+    SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = if (isAdmin && report.user != null) "Activity #${report.id} by ${report.user}" else "Activity #${report.id}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                StatusBadge(
+                    text = report.status.uppercase(Locale.getDefault()),
+                    color = reportStatusColor(report.status),
+                    compact = true,
+                )
+            }
+            Text(
+                text = report.smsMessage,
+                maxLines = 2,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatusBadge(
+                    text = report.analysis?.prediction ?: "Auto logged",
+                    color = MaterialTheme.colorScheme.primary,
+                    compact = true,
+                )
+                StatusBadge(
+                    text = formatFriendlyTimestamp(report.reviewedAt ?: report.createdAt),
+                    color = MaterialTheme.colorScheme.tertiary,
+                    compact = true,
+                )
+            }
+        }
+    }
+}
+
+private fun formatFriendlyTimestamp(rawValue: String?): String {
+    val raw = rawValue?.trim().orEmpty()
+    if (raw.isBlank()) return "Pending review"
+
+    val parsed = parseTimestamp(raw) ?: return raw
+    val now = Calendar.getInstance()
+    val whenCal = Calendar.getInstance().apply { time = parsed }
+    val timeText = SimpleDateFormat("h:mm a", Locale.getDefault()).format(parsed)
+
+    return when {
+        isSameDay(now, whenCal) -> "Today, $timeText"
+        isYesterday(now, whenCal) -> "Yesterday, $timeText"
+        else -> SimpleDateFormat("MMM d, yyyy - h:mm a", Locale.getDefault()).format(parsed)
+    }
+}
+
+private fun parseTimestamp(rawValue: String): Date? {
+    val patterns = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+        "yyyy-MM-dd'T'HH:mm:ssX",
+        "yyyy-MM-dd HH:mm:ss",
+    )
+    for (pattern in patterns) {
+        val parsed = runCatching {
+            SimpleDateFormat(pattern, Locale.getDefault()).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }.parse(rawValue)
+        }.getOrNull()
+        if (parsed != null) return parsed
+    }
+    return null
+}
+
+private fun isSameDay(first: Calendar, second: Calendar): Boolean {
+    return first.get(Calendar.YEAR) == second.get(Calendar.YEAR) &&
+        first.get(Calendar.DAY_OF_YEAR) == second.get(Calendar.DAY_OF_YEAR)
+}
+
+private fun isYesterday(today: Calendar, candidate: Calendar): Boolean {
+    val yesterday = (today.clone() as Calendar).apply {
+        add(Calendar.DAY_OF_YEAR, -1)
+    }
+    return isSameDay(yesterday, candidate)
+}
