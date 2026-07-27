@@ -41,8 +41,8 @@ import com.smsai.smsfrauddetector.core.designsystem.components.PrimaryButton
 import com.smsai.smsfrauddetector.core.designsystem.components.StatusBadge
 import com.smsai.smsfrauddetector.core.designsystem.components.SurfaceCard
 import com.smsai.smsfrauddetector.core.navigation.AppRoute
+import com.smsai.smsfrauddetector.core.utils.toSafePercent
 import com.smsai.smsfrauddetector.data.repository.AppRepository
-import kotlin.math.roundToInt
 
 @Composable
 fun HomeScreen(
@@ -164,7 +164,7 @@ fun HomeScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         MetricCard(
                             title = "Confidence",
-                            value = "${((state.stats?.averageConfidence ?: 0.0) * 100).roundToInt()}%",
+                            value = (state.stats?.averageConfidence ?: 0.0).toSafePercent(),
                             subtitle = "Average certainty",
                             modifier = Modifier.weight(1f),
                         )

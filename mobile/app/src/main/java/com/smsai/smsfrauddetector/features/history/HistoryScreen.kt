@@ -37,13 +37,13 @@ import com.smsai.smsfrauddetector.core.designsystem.components.ErrorStateCard
 import com.smsai.smsfrauddetector.core.designsystem.components.PrimaryButton
 import com.smsai.smsfrauddetector.core.designsystem.components.StatusBadge
 import com.smsai.smsfrauddetector.core.designsystem.components.SurfaceCard
+import com.smsai.smsfrauddetector.core.utils.toSafePercent
 import com.smsai.smsfrauddetector.data.remote.dto.AnalysisResultDto
 import com.smsai.smsfrauddetector.data.repository.AppRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 data class HistoryUiState(
     val loading: Boolean = true,
@@ -141,7 +141,7 @@ fun HistoryScreen(repository: AppRepository) {
                                     text = item.prediction.uppercase(),
                                     color = if (item.isSuspicious) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                                 )
-                                Text(text = "Confidence ${(item.confidence * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                                Text(text = "Confidence ${item.confidence.toSafePercent()}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                             }
                             Text(text = item.message, maxLines = 3)
                             val display = formatHumanDateTime(item.analyzedAt)

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -45,10 +46,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import com.smsai.smsfrauddetector.core.common.SimpleViewModelFactory
 import com.smsai.smsfrauddetector.core.common.ApiResult
 import com.smsai.smsfrauddetector.core.designsystem.components.ErrorStateCard
@@ -89,6 +93,7 @@ fun AuthScreen(
     var lastName by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var authBanner by remember { mutableStateOf<AuthBanner?>(null) }
 
     LaunchedEffect(state) {
@@ -214,7 +219,15 @@ fun AuthScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 label = { Text("Password") },
                                 leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
-                                visualTransformation = PasswordVisualTransformation(),
+                                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                trailingIcon = {
+                                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                        Icon(
+                                            imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                            contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                                        )
+                                    }
+                                },
                                 singleLine = true,
                             )
 

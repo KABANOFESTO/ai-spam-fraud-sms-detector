@@ -55,6 +55,7 @@ import com.smsai.smsfrauddetector.core.designsystem.components.PrimaryButton
 import com.smsai.smsfrauddetector.core.designsystem.components.StatusBadge
 import com.smsai.smsfrauddetector.core.designsystem.components.SurfaceCard
 import com.smsai.smsfrauddetector.core.navigation.AppRoute
+import com.smsai.smsfrauddetector.core.utils.toSafePercent
 import com.smsai.smsfrauddetector.data.remote.dto.DatasetDto
 import com.smsai.smsfrauddetector.data.remote.dto.DashboardResponseDto
 import com.smsai.smsfrauddetector.data.remote.dto.EvaluationReportDto
@@ -301,8 +302,8 @@ fun DashboardScreen(
                         MetricCard("Suspicious", stats.suspiciousCount.toString(), "Flagged", modifier = Modifier.weight(1f))
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        MetricCard("Confidence", "${(stats.averageConfidence * 100).toInt()}%", "Avg certainty", modifier = Modifier.weight(1f))
-                        MetricCard("Rate", "${(stats.suspiciousRate * 100).toInt()}%", "Suspicious rate", modifier = Modifier.weight(1f))
+                        MetricCard("Confidence", stats.averageConfidence.toSafePercent(), "Avg certainty", modifier = Modifier.weight(1f))
+                        MetricCard("Rate", stats.suspiciousRate.toSafePercent(), "Suspicious rate", modifier = Modifier.weight(1f))
                     }
                 }
             }
@@ -534,13 +535,13 @@ private fun PolishedModelCard(model: ModelDto) {
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                StatusBadge(text = "Acc ${(model.accuracy * 100).toInt()}%", color = MaterialTheme.colorScheme.secondary)
-                StatusBadge(text = "F1 ${(model.f1Score * 100).toInt()}%", color = MaterialTheme.colorScheme.secondary)
+                StatusBadge(text = "Acc ${model.accuracy.toSafePercent(0)}", color = MaterialTheme.colorScheme.secondary)
+                StatusBadge(text = "F1 ${model.f1Score.toSafePercent(0)}", color = MaterialTheme.colorScheme.secondary)
                 StatusBadge(text = "Trained ${model.trainedAt?.toString()?.take(10) ?: "recently"}", color = MaterialTheme.colorScheme.tertiary)
             }
 
             Text(
-                text = "Precision ${(model.precision * 100).toInt()}% | Recall ${(model.recall * 100).toInt()}%",
+                text = "Precision ${model.precision.toSafePercent(0)} | Recall ${model.recall.toSafePercent(0)}",
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
             )
         }
@@ -610,15 +611,15 @@ private fun PolishedEvaluationCard(evaluation: EvaluationReportDto) {
                     )
                 }
                 StatusBadge(
-                    text = "${(evaluation.accuracy * 100).toInt()}% accuracy",
+                    text = "${evaluation.accuracy.toSafePercent(0)} accuracy",
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                StatusBadge(text = "F1 ${(evaluation.f1Score * 100).toInt()}%", color = MaterialTheme.colorScheme.secondary)
-                StatusBadge(text = "Precision ${(evaluation.precision * 100).toInt()}%", color = MaterialTheme.colorScheme.secondary)
-                StatusBadge(text = "Recall ${(evaluation.recall * 100).toInt()}%", color = MaterialTheme.colorScheme.secondary)
+                StatusBadge(text = "F1 ${evaluation.f1Score.toSafePercent(0)}", color = MaterialTheme.colorScheme.secondary)
+                StatusBadge(text = "Precision ${evaluation.precision.toSafePercent(0)}", color = MaterialTheme.colorScheme.secondary)
+                StatusBadge(text = "Recall ${evaluation.recall.toSafePercent(0)}", color = MaterialTheme.colorScheme.secondary)
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {

@@ -16,6 +16,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -29,6 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,6 +48,10 @@ import com.smsai.smsfrauddetector.core.designsystem.components.StatusBadge
 import com.smsai.smsfrauddetector.core.designsystem.components.SurfaceCard
 import com.smsai.smsfrauddetector.data.remote.dto.UserDto
 import com.smsai.smsfrauddetector.data.repository.AppRepository
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -111,6 +119,8 @@ fun ProfileScreen(repository: AppRepository, onLogout: () -> Unit) {
     var lastName by rememberSaveable { mutableStateOf("") }
     var currentPassword by rememberSaveable { mutableStateOf("") }
     var newPassword by rememberSaveable { mutableStateOf("") }
+    var currentPasswordVisible by rememberSaveable { mutableStateOf(false) }
+    var newPasswordVisible by rememberSaveable { mutableStateOf(false) }
     var bannerMessage by remember { mutableStateOf<String?>(null) }
     var bannerTone by remember { mutableStateOf(BannerTone.Info) }
 
@@ -168,8 +178,38 @@ fun ProfileScreen(repository: AppRepository, onLogout: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                     )
                     Text(text = "Password update", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    OutlinedTextField(value = currentPassword, onValueChange = { currentPassword = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Current password") })
-                    OutlinedTextField(value = newPassword, onValueChange = { newPassword = it }, modifier = Modifier.fillMaxWidth(), label = { Text("New password") })
+                    OutlinedTextField(
+                        value = currentPassword,
+                        onValueChange = { currentPassword = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Current password") },
+                        leadingIcon = { Icon(imageVector = Icons.Rounded.Lock, contentDescription = null) },
+                        visualTransformation = if (currentPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { currentPasswordVisible = !currentPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (currentPasswordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                    contentDescription = if (currentPasswordVisible) "Hide current password" else "Show current password",
+                                )
+                            }
+                        },
+                    )
+                    OutlinedTextField(
+                        value = newPassword,
+                        onValueChange = { newPassword = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("New password") },
+                        leadingIcon = { Icon(imageVector = Icons.Rounded.Lock, contentDescription = null) },
+                        visualTransformation = if (newPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { newPasswordVisible = !newPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (newPasswordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                    contentDescription = if (newPasswordVisible) "Hide new password" else "Show new password",
+                                )
+                            }
+                        },
+                    )
                     PrimaryButton(text = "Save profile", onClick = { viewModel.save(username, firstName, lastName, currentPassword, newPassword) })
                 }
             }
