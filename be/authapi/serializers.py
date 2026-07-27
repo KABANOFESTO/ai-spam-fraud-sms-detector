@@ -122,10 +122,11 @@ class UserSerializer(serializers.ModelSerializer):
 class ProfileUpdateSerializer(serializers.ModelSerializer):
     current_password = serializers.CharField(write_only=True, required=False, allow_blank=False)
     new_password = serializers.CharField(write_only=True, required=False, validators=[validate_password])
+    remove_profile_picture = serializers.BooleanField(write_only=True, required=False, default=False)
 
     class Meta:
         model = User
-        fields = ("username", "first_name", "last_name", "current_password", "new_password", "profile_picture")
+        fields = ("username", "first_name", "last_name", "current_password", "new_password", "profile_picture", "remove_profile_picture")
         extra_kwargs = {
             "username": {"required": False},
             "first_name": {"required": False, "allow_blank": True},
@@ -142,6 +143,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         return data
 
     def update(self, instance, validated_data):
+        remove_profile_picture = validated_data.pop("remove_profile_picture", False)
         for field in ("username", "first_name", "last_name"):
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
@@ -149,7 +151,11 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         if validated_data.get("new_password"):
             instance.set_password(validated_data["new_password"])
 
-        if "profile_picture" in validated_data:
+        if remove_profile_picture:
+            if instance.profile_picture:
+                instance.profile_picture.delete(save=False)
+            instance.profile_picture = None
+        elif "profile_picture" in validated_data:
             if instance.profile_picture:
                 instance.profile_picture.delete(save=False)
             instance.profile_picture = validated_data["profile_picture"]
