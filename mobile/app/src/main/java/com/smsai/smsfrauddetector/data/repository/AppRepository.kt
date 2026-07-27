@@ -166,6 +166,7 @@ class AppRepository(
         newPassword: String? = null,
         currentPassword: String? = null,
         profilePictureUri: Uri? = null,
+        removeProfilePicture: Boolean = false,
     ): ApiResult<UserDto> = call {
         val fields = mutableMapOf<String, RequestBody>()
         username?.let { fields["username"] = it.toRequestBody("text/plain".toMediaType()) }
@@ -173,6 +174,9 @@ class AppRepository(
         lastName?.let { fields["last_name"] = it.toRequestBody("text/plain".toMediaType()) }
         newPassword?.let { fields["new_password"] = it.toRequestBody("text/plain".toMediaType()) }
         currentPassword?.let { fields["current_password"] = it.toRequestBody("text/plain".toMediaType()) }
+        if (removeProfilePicture) {
+            fields["remove_profile_picture"] = "true".toRequestBody("text/plain".toMediaType())
+        }
 
         val profilePart = profilePictureUri?.let { uri ->
             val file = File(context.cacheDir, "profile_${System.currentTimeMillis()}.jpg")
