@@ -288,7 +288,7 @@ fun SettingsScreen(repository: AppRepository) {
                                 detail = if (defaultSmsApp) {
                                     "This device already trusts the app to receive SMS messages."
                                 } else {
-                                    "Tap below to request the SMS role from Android."
+                                    "Tap below to request the SMS role from Android. If Samsung still hides the app, reinstall the latest APK and check the SMS list again."
                                 },
                             )
                             TrackingChecklistItem(
@@ -441,7 +441,7 @@ private fun evaluateTrackingSetup(
 ) {
     when {
         !SmsTrackingPermissions.isDefaultSmsApp(context) -> {
-            onStatus("Set this app as the default SMS handler to continue.")
+            onStatus("Set this app as the default SMS handler to continue. On Samsung, check Settings > Apps > Default apps > SMS app after reinstalling the latest build.")
         }
         !SmsTrackingPermissions.isSmsPermissionGranted(context) -> {
             smsPermissionLauncher?.launch(Manifest.permission.RECEIVE_SMS)
@@ -467,7 +467,7 @@ private fun startAutomaticTrackingSetup(
     onStatus: (String) -> Unit,
 ) {
     if (!SmsTrackingPermissions.isDefaultSmsApp(context)) {
-        onStatus("Please set this app as the default SMS handler first.")
+        onStatus("Please set this app as the default SMS handler first. If it is missing from Samsung's SMS list, reinstall the latest APK and check again.")
         defaultSmsLauncher.launch(SmsTrackingPermissions.buildDefaultSmsRoleIntent(context))
         return
     }

@@ -14,7 +14,11 @@ import com.smsai.smsfrauddetector.worker.SmsAnalysisWorker
 
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (Telephony.Sms.Intents.SMS_RECEIVED_ACTION != intent?.action) return
+        val action = intent?.action
+        if (
+            action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION &&
+            action != Telephony.Sms.Intents.SMS_DELIVER_ACTION
+        ) return
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
         val body = messages.joinToString(separator = " ") { it.messageBody.orEmpty() }.trim()
         if (body.isBlank()) return
