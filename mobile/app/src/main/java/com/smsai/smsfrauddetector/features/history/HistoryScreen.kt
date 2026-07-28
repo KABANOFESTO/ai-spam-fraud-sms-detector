@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -84,13 +85,19 @@ class HistoryViewModel(
 }
 
 @Composable
-fun HistoryScreen(repository: AppRepository) {
+fun HistoryScreen(repository: AppRepository, highlightItemId: Int? = null) {
     val viewModel: HistoryViewModel = viewModel(
         factory = remember(repository) { SimpleViewModelFactory { HistoryViewModel(repository) } },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
     var pendingDeleteItem by remember { mutableStateOf<AnalysisResultDto?>(null) }
     LaunchedEffect(Unit) { viewModel.load() }
+    LaunchedEffect(state.items, highlightItemId) {
+        val targetId = highlightItemId ?: return@LaunchedEffect
+        val index = state.items.indexOfFirst { it.id == targetId }
+        if (index >= 0) listState.scrollToItem(index)
+    }
 
     Column(
         modifier = Modifier
@@ -103,7 +110,7 @@ fun HistoryScreen(repository: AppRepository) {
                 StatusBadge(text = "Live analysis history", color = MaterialTheme.colorScheme.secondary)
                 Text(text = "History", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text(
-                    text = "Recent predictions and classifications pulled directly from the backend.",
+                    text = "Saved SMS predictions appear here automatically, with human-friendly dates and quick delete controls.",
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -132,7 +139,10 @@ fun HistoryScreen(repository: AppRepository) {
                 }
             }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyColumn(
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 items(state.items) { item ->
                     SurfaceCard(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -143,15 +153,14 @@ fun HistoryScreen(repository: AppRepository) {
                                 )
                                 Text(text = "Confidence ${item.confidence.toSafePercent()}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                             }
+                            if (highlightItemId == item.id) {
+                                StatusBadge(text = "Opened from notification", color = MaterialTheme.colorScheme.secondary, compact = true)
+                            }
                             Text(text = item.message, maxLines = 3)
                             val display = formatHumanDateTime(item.analyzedAt)
                             val subtitle = formatHumanTimeSubtitle(item.analyzedAt)
                             Text(
                                 text = display ?: "Recently analyzed",
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                            Text(
-                                text = subtitle ?: "Saved by the backend automatically",
                                 style = MaterialTheme.typography.labelMedium,
                             )
                             Text(

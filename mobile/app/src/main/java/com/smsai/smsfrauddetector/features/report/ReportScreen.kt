@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -84,19 +85,14 @@ class ReportViewModel(private val repository: AppRepository) : ViewModel() {
             val isAdmin = session.user?.role.equals("Admin", ignoreCase = true)
 
             val reportsResult = repository.reports(page = 1, pageSize = 100)
-            val adminSummaryResult = if (isAdmin) repository.reportDashboard() else null
 
             val reports = when (reportsResult) {
                 is ApiResult.Success -> reportsResult.data.results
                 else -> emptyList()
             }
-            val summary = when (adminSummaryResult) {
-                is ApiResult.Success -> adminSummaryResult.data
-                else -> buildLocalSummary(reports)
-            }
+            val summary = buildLiveSummary(reports)
             val error = listOfNotNull(
                 reportsResult.takeIf { it is ApiResult.Error }?.let { (it as ApiResult.Error).message },
-                adminSummaryResult.takeIf { it is ApiResult.Error }?.let { (it as ApiResult.Error).message },
             ).firstOrNull()
 
             _state.value = ReportUiState(
@@ -109,39 +105,59 @@ class ReportViewModel(private val repository: AppRepository) : ViewModel() {
         }
     }
 
-    private fun buildLocalSummary(reports: List<FraudReportDto>): Map<String, Int> {
+    private fun buildLiveSummary(reports: List<FraudReportDto>): Map<String, Int> {
         val pending = reports.count { it.status.equals("PENDING", ignoreCase = true) }
         val reviewing = reports.count { it.status.equals("REVIEWING", ignoreCase = true) }
         val reviewed = reports.count { it.status.equals("REVIEWED", ignoreCase = true) }
         val resolved = reports.count { it.status.equals("RESOLVED", ignoreCase = true) }
         val rejected = reports.count { it.status.equals("REJECTED", ignoreCase = true) }
+        val predictionReports = reports.mapNotNull { it.analysis }
+        val suspiciousPredictions = predictionReports.count {
+            it.isSuspicious || it.prediction.contains("spam", ignoreCase = true) || it.prediction.contains("fraud", ignoreCase = true)
+        }
+        val legitimatePredictions = predictionReports.count {
+            it.prediction.contains("legitimate", ignoreCase = true) ||
+                it.prediction.contains("safe", ignoreCase = true) ||
+                it.prediction.contains("benign", ignoreCase = true)
+        }
         return mapOf(
             "total_reports" to reports.size,
+            "sms_count" to reports.size,
             "pending_reports" to pending,
             "reviewing_reports" to reviewing,
             "reviewed_reports" to reviewed,
             "resolved_reports" to resolved,
             "rejected_reports" to rejected,
+            "prediction_reports" to predictionReports.size,
+            "suspicious_predictions" to suspiciousPredictions,
+            "legitimate_predictions" to legitimatePredictions,
         )
     }
 }
 
 @Composable
-fun ReportScreen(repository: AppRepository) {
+fun ReportScreen(repository: AppRepository, highlightReportId: Int? = null) {
     val viewModel: ReportViewModel = viewModel(
         factory = remember(repository) { SimpleViewModelFactory { ReportViewModel(repository) } },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     val isAdmin = state.viewerRole.equals("Admin", ignoreCase = true)
     var bannerMessage by remember { mutableStateOf<String?>(null) }
     var bannerTone by remember { mutableStateOf(BannerTone.Info) }
 
     LaunchedEffect(Unit) { viewModel.load() }
+    LaunchedEffect(state.reports, highlightReportId) {
+        val targetId = highlightReportId ?: return@LaunchedEffect
+        val index = state.reports.indexOfFirst { it.id == targetId }
+        if (index >= 0) listState.scrollToItem(index)
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(20.dp),
@@ -158,43 +174,35 @@ fun ReportScreen(repository: AppRepository) {
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                     )
-                    Text(
-                        text = if (isAdmin) {
-                            "This view is generated from live backend data and reflects the current review workload."
-                        } else {
-                            "This view is generated from your own submitted reports and current review status."
-                        },
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                    )
                 }
             }
 
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                     MetricTile(
-                        title = "Total",
-                        value = state.summary["total_reports"].orZero().toString(),
-                        subtitle = if (isAdmin) "All reports" else "Your reports",
+                        title = if (isAdmin) "SMS" else "Total",
+                        value = if (isAdmin) state.summary["sms_count"].orZero().toString() else state.summary["total_reports"].orZero().toString(),
+                        subtitle = if (isAdmin) "Live report messages" else "Your reports",
                         modifier = Modifier.weight(1f),
                     )
                     MetricTile(
-                        title = "Pending",
-                        value = state.summary["pending_reports"].orZero().toString(),
-                        subtitle = "Awaiting review",
+                        title = if (isAdmin) "Predictions" else "Pending",
+                        value = if (isAdmin) state.summary["prediction_reports"].orZero().toString() else state.summary["pending_reports"].orZero().toString(),
+                        subtitle = if (isAdmin) "Linked AI outputs" else "Awaiting review",
                         modifier = Modifier.weight(1f),
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                     MetricTile(
-                        title = "Reviewed",
-                        value = state.summary["reviewed_reports"].orZero().toString(),
-                        subtitle = "Completed",
+                        title = if (isAdmin) "Suspicious" else "Reviewed",
+                        value = if (isAdmin) state.summary["suspicious_predictions"].orZero().toString() else state.summary["reviewed_reports"].orZero().toString(),
+                        subtitle = if (isAdmin) "High-risk outcomes" else "Completed",
                         modifier = Modifier.weight(1f),
                     )
                     MetricTile(
-                        title = if (isAdmin) "Resolved" else "Status",
-                        value = if (isAdmin) state.summary["resolved_reports"].orZero().toString() else state.reports.count { it.status.equals("RESOLVED", ignoreCase = true) }.toString(),
-                        subtitle = if (isAdmin) "Closed cases" else "Live activity",
+                        title = if (isAdmin) "Legitimate" else "Status",
+                        value = if (isAdmin) state.summary["legitimate_predictions"].orZero().toString() else state.reports.count { it.status.equals("RESOLVED", ignoreCase = true) }.toString(),
+                        subtitle = if (isAdmin) "Safe predictions" else "Live activity",
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -253,14 +261,6 @@ fun ReportScreen(repository: AppRepository) {
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
-                        Text(
-                            text = if (isAdmin) {
-                                "This feed is populated automatically from the backend and shows the latest review and analysis actions across the platform."
-                            } else {
-                                "This feed is populated automatically from the backend and shows the latest analysis and report activity for your account."
-                            },
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                        )
                         if (state.reports.isEmpty()) {
                             Text(
                                 text = "No activity records are available yet.",
@@ -299,12 +299,20 @@ fun ReportScreen(repository: AppRepository) {
                 item {
                     EmptyReportCard(
                         title = if (isAdmin) "No system activity found yet" else "No personal activity found yet",
-                        subtitle = if (isAdmin) "When users submit reports or the backend records review actions, they will appear here automatically." else "Any messages you analyze or reports you submit will appear here automatically.",
+                        subtitle = if (isAdmin) {
+                            "Admin-sourced SMS reports and prediction results will appear here as users interact with the app."
+                        } else {
+                            "Your saved report records will appear here automatically after analysis and review."
+                        },
                     )
                 }
             } else {
                 items(state.reports, key = { it.id }) { report ->
-                    ReportCard(report = report, isAdmin = isAdmin)
+                    ReportCard(
+                        report = report,
+                        isAdmin = isAdmin,
+                        highlighted = highlightReportId == report.id,
+                    )
                 }
             }
         }
@@ -403,7 +411,7 @@ private suspend fun createReportPdf(context: Context, state: ReportUiState, isAd
     canvas.drawText(if (isAdmin) "Admin Report Export" else "User Report Export", 70f, y, titlePaint)
     y += 34f
     canvas.drawText(
-        if (isAdmin) "A formal snapshot of system review activity and live backend report data." else "A formal snapshot of your submitted reports and current review outcomes.",
+        if (isAdmin) "A formal snapshot of system review activity and live report data." else "A formal snapshot of your submitted reports and current review outcomes.",
         70f,
         y,
         subtitlePaint,
@@ -427,6 +435,10 @@ private suspend fun createReportPdf(context: Context, state: ReportUiState, isAd
 
     val summaryRows = listOf(
         "Total reports" to state.summary["total_reports"].orZero(),
+        "SMS items" to state.summary["sms_count"].orZero(),
+        "Predictions" to state.summary["prediction_reports"].orZero(),
+        "Suspicious" to state.summary["suspicious_predictions"].orZero(),
+        "Legitimate" to state.summary["legitimate_predictions"].orZero(),
         "Pending" to state.summary["pending_reports"].orZero(),
         "Reviewing" to state.summary["reviewing_reports"].orZero(),
         "Reviewed" to state.summary["reviewed_reports"].orZero(),
@@ -512,7 +524,7 @@ private fun sharePdf(context: Context, uri: Uri, title: String) {
 }
 
 @Composable
-private fun ReportCard(report: FraudReportDto, isAdmin: Boolean) {
+private fun ReportCard(report: FraudReportDto, isAdmin: Boolean, highlighted: Boolean = false) {
     SurfaceCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
@@ -532,6 +544,9 @@ private fun ReportCard(report: FraudReportDto, isAdmin: Boolean) {
                     text = report.status.uppercase(Locale.getDefault()),
                     color = reportStatusColor(report.status),
                 )
+            }
+            if (highlighted) {
+                StatusBadge(text = "Opened from notification", color = MaterialTheme.colorScheme.secondary, compact = true)
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {

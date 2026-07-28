@@ -385,10 +385,6 @@ fun AdminUsersScreen(repository: AppRepository) {
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                             )
-                            Text(
-                                text = "Create the first account or reload the list once the backend is ready.",
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                            )
                             PrimaryButton(text = "Reload users", onClick = { viewModel.load() })
                         }
                     }

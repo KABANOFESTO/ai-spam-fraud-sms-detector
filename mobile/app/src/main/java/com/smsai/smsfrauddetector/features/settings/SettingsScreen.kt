@@ -222,10 +222,6 @@ fun SettingsScreen(repository: AppRepository) {
                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     StatusBadge(text = "App control center", color = MaterialTheme.colorScheme.secondary)
                     Text(text = "Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text(
-                        text = "Configure the backend, theme, and SMS tracking permissions from one secure place.",
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                         StatusBadge(text = "Backend sync", color = MaterialTheme.colorScheme.primary)
                         StatusBadge(text = "Tracking setup", color = MaterialTheme.colorScheme.primary)
@@ -241,10 +237,6 @@ fun SettingsScreen(repository: AppRepository) {
                 SurfaceCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(text = "Admin configuration", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            text = "Only administrators can change backend connection settings. Users will always use the live deployed backend automatically.",
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                        )
                         OutlinedTextField(
                             value = baseUrl,
                             onValueChange = { baseUrl = it },
@@ -261,7 +253,7 @@ fun SettingsScreen(repository: AppRepository) {
                         StatusBadge(text = "User settings", color = MaterialTheme.colorScheme.primary)
                         Text(text = "Personal preferences", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                         Text(
-                            text = "Your app is already connected to the live backend. You can only adjust local preferences like appearance and tracking state here.",
+                            text = "Your app is already live. You can only adjust local preferences like appearance and tracking state here.",
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                         )
                         RowSetting("Dark mode", darkMode) { darkMode = it }

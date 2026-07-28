@@ -22,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import coil.compose.AsyncImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.NavHost
@@ -56,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.TopAppBarDefaults
 import com.smsai.smsfrauddetector.core.common.SimpleViewModelFactory
 import com.smsai.smsfrauddetector.core.common.ApiResult
+import com.smsai.smsfrauddetector.core.constants.AppConstants
 import com.smsai.smsfrauddetector.data.repository.AppRepository
 import com.smsai.smsfrauddetector.data.remote.dto.UserDto
 import com.smsai.smsfrauddetector.features.analysis.AnalysisScreen
@@ -67,6 +70,7 @@ import com.smsai.smsfrauddetector.features.dashboard.DashboardScreen
 import com.smsai.smsfrauddetector.features.history.HistoryScreen
 import com.smsai.smsfrauddetector.features.home.HomeScreen
 import com.smsai.smsfrauddetector.features.profile.ProfileScreen
+import com.smsai.smsfrauddetector.features.notifications.NotificationCenterScreen
 import com.smsai.smsfrauddetector.features.report.ReportScreen
 import com.smsai.smsfrauddetector.features.settings.SettingsScreen
 import com.smsai.smsfrauddetector.features.splash.SplashScreen
@@ -81,6 +85,7 @@ private val loggedInRoutes = setOf(
     AppRoute.Home.route,
     AppRoute.Analyze.route,
     AppRoute.History.route,
+    AppRoute.Notifications.route,
     AppRoute.Report.route,
     AppRoute.Profile.route,
     AppRoute.Settings.route,
@@ -172,8 +177,9 @@ fun AppNavGraph(
 ) {
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
+    val currentRouteKey = currentRoute?.substringBefore("?")
     val isAdmin = currentUserRole.equals("Admin", ignoreCase = true)
-    val showChrome = currentRoute in loggedInRoutes
+    val showChrome = currentRouteKey in loggedInRoutes
     val chromeItems = if (isAdmin) bottomNavItems else bottomNavItems.filterNot { it.route == AppRoute.AdminUsers.route }
     val chromeViewModel: AppChromeViewModel = viewModel(
         factory = remember(repository) { SimpleViewModelFactory { AppChromeViewModel(repository) } },
@@ -219,9 +225,9 @@ fun AppNavGraph(
                         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.02f),
                         ),
-                        title = { Text(text = routeTitle(currentRoute)) },
+                        title = { Text(text = routeTitle(currentRouteKey)) },
                         navigationIcon = {
-                            if (currentRoute != AppRoute.Home.route) {
+                            if (currentRouteKey != AppRoute.Home.route) {
                                 IconButton(onClick = { navController.popBackStack() }) {
                                     Icon(imageVector = Icons.Rounded.ArrowBack, contentDescription = "Back")
                                 }
@@ -236,18 +242,18 @@ fun AppNavGraph(
                                 },
                             ) {
                                 IconButton(onClick = {
-                                    navController.navigate(if (isAdmin) AppRoute.Report.route else AppRoute.History.route) {
+                                    navController.navigate(AppRoute.Notifications.route) {
                                         launchSingleTop = true
                                         restoreState = true
                                         popUpTo(AppRoute.Home.route) { saveState = true }
                                     }
                                 }) {
-                                    Icon(imageVector = Icons.Rounded.Notifications, contentDescription = "System notifications")
+                                    Icon(imageVector = Icons.Rounded.Notifications, contentDescription = "Open notifications")
                                 }
                             }
 
                             IconButton(onClick = {
-                                if (currentRoute != AppRoute.Profile.route) {
+                                if (currentRouteKey != AppRoute.Profile.route) {
                                     navController.navigate(AppRoute.Profile.route) {
                                         launchSingleTop = true
                                         restoreState = true
@@ -270,7 +276,7 @@ fun AppNavGraph(
                 NavigationBar {
                     chromeItems.forEach { item ->
                         NavigationBarItem(
-                            selected = currentRoute == item.route,
+                            selected = currentRouteKey == item.route,
                             onClick = {
                                 navController.navigate(item.route) {
                                     launchSingleTop = true
@@ -393,8 +399,44 @@ fun AppNavGraph(
             composable(AppRoute.History.route) {
                 HistoryScreen(repository = repository)
             }
+            composable(
+                route = "history?highlightId={highlightId}",
+                arguments = listOf(navArgument("highlightId") {
+                    type = NavType.IntType
+                    defaultValue = -1
+                }),
+            ) { entry ->
+                HistoryScreen(
+                    repository = repository,
+                    highlightItemId = entry.arguments?.getInt("highlightId")?.takeIf { it >= 0 },
+                )
+            }
+            composable(AppRoute.Notifications.route) {
+                NotificationCenterScreen(
+                    repository = repository,
+                    onNavigate = { route ->
+                        navController.navigate(route) {
+                            launchSingleTop = true
+                            restoreState = true
+                            popUpTo(AppRoute.Home.route) { saveState = true }
+                        }
+                    },
+                )
+            }
             composable(AppRoute.Report.route) {
                 ReportScreen(repository = repository)
+            }
+            composable(
+                route = "report?highlightId={highlightId}",
+                arguments = listOf(navArgument("highlightId") {
+                    type = NavType.IntType
+                    defaultValue = -1
+                }),
+            ) { entry ->
+                ReportScreen(
+                    repository = repository,
+                    highlightReportId = entry.arguments?.getInt("highlightId")?.takeIf { it >= 0 },
+                )
             }
             composable(AppRoute.Profile.route) {
                 ProfileScreen(
@@ -427,6 +469,7 @@ private fun routeTitle(route: String?): String {
         AppRoute.Home.route -> "Home"
         AppRoute.Analyze.route -> "Analyze SMS"
         AppRoute.History.route -> "History"
+        AppRoute.Notifications.route -> "Notifications"
         AppRoute.Report.route -> "Report"
         AppRoute.Profile.route -> "Profile"
         AppRoute.Settings.route -> "Settings"
@@ -472,6 +515,9 @@ private fun ProfileChip(
             else -> "Access limited"
         }
     }
+    val profileImageUrl = remember(user) {
+        resolveProfileImageUrl(user?.profilePictureUrl)
+    }
 
     Surface(
         shape = RoundedCornerShape(999.dp),
@@ -493,7 +539,16 @@ private fun ProfileChip(
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(text = initials, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                if (profileImageUrl.isNullOrBlank()) {
+                    Text(text = initials, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                } else {
+                    AsyncImage(
+                        model = profileImageUrl,
+                        contentDescription = "Profile photo",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
                 if (hasAttention) {
                     Box(
                         modifier = Modifier
@@ -541,5 +596,15 @@ private fun ProfileChip(
                 )
             }
         }
+    }
+}
+
+private fun resolveProfileImageUrl(raw: String?): String? {
+    val value = raw?.trim().orEmpty()
+    if (value.isBlank()) return null
+    return if (value.startsWith("http://", ignoreCase = true) || value.startsWith("https://", ignoreCase = true)) {
+        value
+    } else {
+        AppConstants.DEFAULT_BASE_URL.trimEnd('/') + "/" + value.trimStart('/')
     }
 }

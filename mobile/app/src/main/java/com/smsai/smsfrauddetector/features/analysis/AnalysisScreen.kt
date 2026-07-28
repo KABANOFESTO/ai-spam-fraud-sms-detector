@@ -159,7 +159,6 @@ fun AnalysisScreen(
             SurfaceCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(text = "Message input", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(text = "The model response updates from the backend and can be saved as a report when the message is suspicious.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
                     OutlinedTextField(
                         value = message,
                         onValueChange = { message = it },

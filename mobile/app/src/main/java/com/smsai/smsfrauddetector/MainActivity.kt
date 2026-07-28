@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
         }
         val route = extraRoute ?: deepLinkRoute
         launchRoute = route?.takeIf {
-            it == AppRoute.History.route || it.startsWith("reset-password/")
+            it == AppRoute.History.route || it == AppRoute.Notifications.route || it.startsWith("reset-password/")
         }
     }
 }
