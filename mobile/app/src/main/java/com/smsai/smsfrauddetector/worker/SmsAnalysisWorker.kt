@@ -66,7 +66,7 @@ class SmsAnalysisWorker(
 
         val launchIntent = Intent(applicationContext, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(AppLaunchDestination.EXTRA_ROUTE, AppRoute.History.route)
+            putExtra(AppLaunchDestination.EXTRA_ROUTE, AppRoute.Notifications.route)
         }
         val pendingIntent = PendingIntent.getActivity(
             applicationContext,

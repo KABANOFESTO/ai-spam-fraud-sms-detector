@@ -55,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -66,6 +67,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.smsai.smsfrauddetector.core.common.ApiResult
 import com.smsai.smsfrauddetector.core.common.SimpleViewModelFactory
+import com.smsai.smsfrauddetector.core.constants.AppConstants
 import com.smsai.smsfrauddetector.core.designsystem.components.BannerTone
 import com.smsai.smsfrauddetector.core.designsystem.components.ErrorStateCard
 import com.smsai.smsfrauddetector.core.designsystem.components.FeedbackBanner
@@ -184,16 +186,21 @@ fun ProfileScreen(repository: AppRepository, onLogout: () -> Unit) {
     val displayedPhoto = when {
         removePhotoRequested -> null
         !selectedPhotoUri.isNullOrBlank() -> selectedPhotoUri
-        else -> state.user?.profilePictureUrl
+        else -> resolveProfileImageUrl(state.user?.profilePictureUrl)
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val isCompactLayout = LocalConfiguration.current.screenWidthDp < 360
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
             SurfaceCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Box(
                     modifier = Modifier
@@ -209,107 +216,65 @@ fun ProfileScreen(repository: AppRepository, onLogout: () -> Unit) {
                         )
                         .padding(20.dp),
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(104.dp)
-                                .clip(RoundedCornerShape(28.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), RoundedCornerShape(28.dp)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (displayedPhoto.isNullOrBlank()) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Icon(imageVector = Icons.Rounded.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                    Text(
-                                        text = (state.user?.firstName?.firstOrNull()?.uppercaseChar()?.toString()
-                                            ?: state.user?.username?.firstOrNull()?.uppercaseChar()?.toString()
-                                            ?: "U"),
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                }
-                            } else {
-                                AsyncImage(
-                                    model = displayedPhoto,
-                                    contentDescription = "Profile picture",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop,
-                                )
-                            }
-                        }
-
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StatusBadge(text = "Secure account", color = MaterialTheme.colorScheme.secondary, compact = true)
-                            Text(text = "Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                            Text(
-                                text = "Your profile stays one tap away. Edit your details in a compact bottom sheet, upload a photo, or remove it instantly.",
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    if (isCompactLayout) {
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            ProfileHeroImage(displayedPhoto = displayedPhoto, user = state.user)
+                            ProfileHeroContent(
+                                username = username,
+                                firstName = firstName,
+                                lastName = lastName,
+                                onEdit = { editorOpen = true },
+                                onPickPhoto = { photoPicker.launch(arrayOf("image/*")) },
+                                onRemovePhoto = {
+                                    selectedPhotoUri = null
+                                    removePhotoRequested = true
+                                    editorOpen = true
+                                },
+                                onLogout = { viewModel.logout(onLogout) },
+                                hasPhoto = displayedPhoto != null,
+                                compactLayout = true,
                             )
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                StatusBadge(text = "Live sync", color = MaterialTheme.colorScheme.primary, compact = true)
-                                StatusBadge(text = "Photo ready", color = MaterialTheme.colorScheme.primary, compact = true)
-                                StatusBadge(text = "Password change", color = MaterialTheme.colorScheme.primary, compact = true)
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                                PrimaryButton(
-                                    text = "Edit profile",
-                                    onClick = { editorOpen = true },
-                                    modifier = Modifier.weight(1f),
-                                    trailingIcon = true,
-                                )
-                                PrimaryButton(
-                                    text = if (displayedPhoto == null) "Upload photo" else "Change photo",
-                                    onClick = { photoPicker.launch(arrayOf("image/*")) },
-                                    modifier = Modifier.weight(1f),
-                                    trailingIcon = true,
-                                )
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                                PrimaryButton(
-                                    text = "Remove photo",
-                                    onClick = {
-                                        selectedPhotoUri = null
-                                        removePhotoRequested = true
-                                        editorOpen = true
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    enabled = displayedPhoto != null,
-                                )
-                                PrimaryButton(
-                                    text = "Logout",
-                                    onClick = { viewModel.logout(onLogout) },
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
+                        }
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            ProfileHeroImage(displayedPhoto = displayedPhoto, user = state.user)
+                            ProfileHeroContent(
+                                username = username,
+                                firstName = firstName,
+                                lastName = lastName,
+                                onEdit = { editorOpen = true },
+                                onPickPhoto = { photoPicker.launch(arrayOf("image/*")) },
+                                onRemovePhoto = {
+                                    selectedPhotoUri = null
+                                    removePhotoRequested = true
+                                    editorOpen = true
+                                },
+                                onLogout = { viewModel.logout(onLogout) },
+                                hasPhoto = displayedPhoto != null,
+                                compactLayout = false,
+                                modifier = Modifier.weight(1f),
+                            )
                         }
                     }
                 }
             }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                if (state.loading) {
-                    CircularProgressIndicator()
-                }
-                state.error?.let { ErrorStateCard(message = it, retryText = "Reload profile", onRetry = { viewModel.load() }) }
-                SurfaceCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(text = "Profile summary", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                        Text(text = "@$username", fontWeight = FontWeight.Bold)
-                        Text(text = "${firstName.ifBlank { "First name" }} ${lastName.ifBlank { "Last name" }}".trim())
-                        Text(
-                            text = state.user?.email ?: "Email unavailable",
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StatusBadge(text = state.user?.role ?: "User", color = MaterialTheme.colorScheme.primary, compact = true)
-                            StatusBadge(text = state.user?.status ?: "Active", color = MaterialTheme.colorScheme.secondary, compact = true)
-                        }
+            if (state.loading) {
+                CircularProgressIndicator()
+            }
+            state.error?.let { ErrorStateCard(message = it, retryText = "Reload profile", onRetry = { viewModel.load() }) }
+            SurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(text = "Profile summary", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(text = "@$username", fontWeight = FontWeight.Bold)
+                    Text(text = "${firstName.ifBlank { "First name" }} ${lastName.ifBlank { "Last name" }}".trim())
+                    Text(
+                        text = state.user?.email ?: "Email unavailable",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatusBadge(text = state.user?.role ?: "User", color = MaterialTheme.colorScheme.primary, compact = true)
+                        StatusBadge(text = state.user?.status ?: "Active", color = MaterialTheme.colorScheme.secondary, compact = true)
                     }
                 }
             }
@@ -379,6 +344,142 @@ fun ProfileScreen(repository: AppRepository, onLogout: () -> Unit) {
         ) {
             bannerMessage?.let { FeedbackBanner(message = it, tone = bannerTone) }
         }
+    }
+}
+
+@Composable
+private fun ProfileHeroImage(
+    displayedPhoto: String?,
+    user: UserDto?,
+) {
+    Box(
+        modifier = Modifier
+            .size(104.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), RoundedCornerShape(28.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (displayedPhoto.isNullOrBlank()) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(imageVector = Icons.Rounded.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Text(
+                    text = (user?.firstName?.firstOrNull()?.uppercaseChar()?.toString()
+                        ?: user?.username?.firstOrNull()?.uppercaseChar()?.toString()
+                        ?: "U"),
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        } else {
+            AsyncImage(
+                model = displayedPhoto,
+                contentDescription = "Profile picture",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileHeroContent(
+    username: String,
+    firstName: String,
+    lastName: String,
+    onEdit: () -> Unit,
+    onPickPhoto: () -> Unit,
+    onRemovePhoto: () -> Unit,
+    onLogout: () -> Unit,
+    hasPhoto: Boolean,
+    compactLayout: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        StatusBadge(text = "Secure account", color = MaterialTheme.colorScheme.secondary, compact = true)
+        Text(text = "Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(
+            text = "Your profile stays one tap away. Edit your details in a compact bottom sheet, upload a photo, or remove it instantly.",
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            StatusBadge(text = "Live sync", color = MaterialTheme.colorScheme.primary, compact = true)
+            StatusBadge(text = "Photo ready", color = MaterialTheme.colorScheme.primary, compact = true)
+            StatusBadge(text = "Password change", color = MaterialTheme.colorScheme.primary, compact = true)
+        }
+        if (username.isNotBlank() || firstName.isNotBlank() || lastName.isNotBlank()) {
+            Text(
+                text = "@$username",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        if (compactLayout) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                PrimaryButton(
+                    text = "Edit profile",
+                    onClick = onEdit,
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = true,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    PrimaryButton(
+                        text = if (hasPhoto) "Change photo" else "Upload photo",
+                        onClick = onPickPhoto,
+                        modifier = Modifier.weight(1f),
+                        trailingIcon = true,
+                    )
+                    PrimaryButton(
+                        text = "Remove photo",
+                        onClick = onRemovePhoto,
+                        modifier = Modifier.weight(1f),
+                        enabled = hasPhoto,
+                    )
+                }
+                PrimaryButton(
+                    text = "Logout",
+                    onClick = onLogout,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                PrimaryButton(
+                    text = "Edit profile",
+                    onClick = onEdit,
+                    modifier = Modifier.weight(1f),
+                    trailingIcon = true,
+                )
+                PrimaryButton(
+                    text = if (hasPhoto) "Change photo" else "Upload photo",
+                    onClick = onPickPhoto,
+                    modifier = Modifier.weight(1f),
+                    trailingIcon = true,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                PrimaryButton(
+                    text = "Remove photo",
+                    onClick = onRemovePhoto,
+                    modifier = Modifier.weight(1f),
+                    enabled = hasPhoto,
+                )
+                PrimaryButton(
+                    text = "Logout",
+                    onClick = onLogout,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+private fun resolveProfileImageUrl(raw: String?): String? {
+    val value = raw?.trim().orEmpty()
+    if (value.isBlank()) return null
+    return if (value.startsWith("http://", ignoreCase = true) || value.startsWith("https://", ignoreCase = true)) {
+        value
+    } else {
+        AppConstants.DEFAULT_BASE_URL.trimEnd('/') + "/" + value.trimStart('/')
     }
 }
 

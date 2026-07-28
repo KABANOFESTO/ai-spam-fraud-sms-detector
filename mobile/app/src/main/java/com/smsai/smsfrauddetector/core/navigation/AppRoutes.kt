@@ -8,6 +8,7 @@ sealed class AppRoute(val route: String) {
     data object Home : AppRoute("home")
     data object Analyze : AppRoute("analyze")
     data object History : AppRoute("history")
+    data object Notifications : AppRoute("notifications")
     data object Report : AppRoute("report")
     data object Profile : AppRoute("profile")
     data object Settings : AppRoute("settings")
@@ -16,6 +17,8 @@ sealed class AppRoute(val route: String) {
 
     companion object {
         fun resetPassword(uid: String, token: String): String = "reset-password/$uid/$token"
+        fun historyItem(itemId: Int): String = "history?highlightId=$itemId"
+        fun reportItem(itemId: Int): String = "report?highlightId=$itemId"
     }
 }
 
