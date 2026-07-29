@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -147,6 +148,7 @@ fun ReportScreen(repository: AppRepository, highlightReportId: Int? = null) {
     val isAdmin = state.viewerRole.equals("Admin", ignoreCase = true)
     var bannerMessage by remember { mutableStateOf<String?>(null) }
     var bannerTone by remember { mutableStateOf(BannerTone.Info) }
+    var bannerToken by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(state.reports, highlightReportId) {
@@ -222,9 +224,11 @@ fun ReportScreen(repository: AppRepository, highlightReportId: Int? = null) {
                                             sharePdf(context, uri, if (isAdmin) "Admin report" else "My report")
                                             bannerMessage = "PDF exported successfully."
                                             bannerTone = BannerTone.Success
+                                            bannerToken += 1
                                         } catch (exc: Exception) {
                                             bannerMessage = exc.message ?: "Unable to export PDF."
                                             bannerTone = BannerTone.Error
+                                            bannerToken += 1
                                         }
                                     }
                                 },
@@ -327,6 +331,14 @@ fun ReportScreen(repository: AppRepository, highlightReportId: Int? = null) {
             exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
         ) {
             bannerMessage?.let { FeedbackBanner(message = it, tone = bannerTone) }
+        }
+    }
+
+    LaunchedEffect(bannerToken) {
+        val messageSnapshot = bannerMessage ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(2400)
+        if (bannerMessage == messageSnapshot) {
+            bannerMessage = null
         }
     }
 }

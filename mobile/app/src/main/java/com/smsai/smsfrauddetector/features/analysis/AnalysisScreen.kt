@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -117,6 +118,7 @@ fun AnalysisScreen(
     var message by rememberSaveable { mutableStateOf("") }
     var bannerMessage by remember { mutableStateOf<String?>(null) }
     var bannerTone by remember { mutableStateOf(BannerTone.Info) }
+    var bannerToken by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(state.reportStatus) {
         val status = state.reportStatus ?: return@LaunchedEffect
@@ -126,8 +128,15 @@ fun AnalysisScreen(
         } else {
             BannerTone.Error
         }
+        bannerToken += 1
+    }
+
+    LaunchedEffect(bannerToken) {
+        val messageSnapshot = bannerMessage ?: return@LaunchedEffect
         kotlinx.coroutines.delay(2400)
-        bannerMessage = null
+        if (bannerMessage == messageSnapshot) {
+            bannerMessage = null
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {

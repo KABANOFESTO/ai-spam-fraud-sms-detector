@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -117,20 +118,28 @@ fun ResetPasswordScreen(
     var newPassword by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
     var bannerMessage by remember { mutableStateOf<String?>(null) }
+    var bannerToken by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(state.message) {
         val message = state.message ?: return@LaunchedEffect
         bannerMessage = message
-        delay(1800)
         viewModel.clearMessage()
         onDone()
+        bannerToken += 1
     }
 
     LaunchedEffect(state.error) {
         val error = state.error ?: return@LaunchedEffect
         bannerMessage = error
+        bannerToken += 1
+    }
+
+    LaunchedEffect(bannerToken) {
+        val messageSnapshot = bannerMessage ?: return@LaunchedEffect
         delay(2200)
-        bannerMessage = null
+        if (bannerMessage == messageSnapshot) {
+            bannerMessage = null
+        }
     }
 
     SmsGradientBackground {
