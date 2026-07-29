@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,6 +58,7 @@ fun HomeScreen(
     val isAdmin = state.user?.role.equals("Admin", ignoreCase = true)
     var bannerMessage by remember { mutableStateOf<String?>(null) }
     var bannerTone by remember { mutableStateOf(BannerTone.Info) }
+    var bannerToken by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
         viewModel.load()
@@ -80,6 +82,15 @@ fun HomeScreen(
             health?.status?.equals("ok", true) == true && health.modelReady -> BannerTone.Success
             health?.status?.equals("ok", true) == true -> BannerTone.Info
             else -> BannerTone.Error
+        }
+        bannerToken += 1
+    }
+
+    LaunchedEffect(bannerToken) {
+        val message = bannerMessage ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(2600)
+        if (bannerMessage == message) {
+            bannerMessage = null
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {

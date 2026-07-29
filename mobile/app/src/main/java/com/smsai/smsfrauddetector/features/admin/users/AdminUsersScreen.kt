@@ -25,6 +25,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -195,6 +196,7 @@ fun AdminUsersScreen(repository: AppRepository) {
     var bannerTone by remember { mutableStateOf(BannerTone.Info) }
     var pendingDeleteUser by remember { mutableStateOf<UserDto?>(null) }
     var pendingToggleUser by remember { mutableStateOf<UserDto?>(null) }
+    var bannerToken by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(selectedUser) {
@@ -224,9 +226,16 @@ fun AdminUsersScreen(repository: AppRepository) {
                 message.contains("error", ignoreCase = true) -> BannerTone.Error
             else -> BannerTone.Success
         }
-        kotlinx.coroutines.delay(2400)
-        bannerMessage = null
         viewModel.clearStatus()
+        bannerToken += 1
+    }
+
+    LaunchedEffect(bannerToken) {
+        val messageSnapshot = bannerMessage ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(2400)
+        if (bannerMessage == messageSnapshot) {
+            bannerMessage = null
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {

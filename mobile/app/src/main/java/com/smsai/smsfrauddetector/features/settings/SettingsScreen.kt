@@ -2,7 +2,9 @@ package com.smsai.smsfrauddetector.features.settings
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -117,15 +119,31 @@ fun SettingsScreen(repository: AppRepository) {
     var trackingStatusMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var statusTone by remember { mutableStateOf(BannerTone.Info) }
     var statusRefresh by remember { mutableIntStateOf(0) }
+    var trackingToken by remember { mutableIntStateOf(0) }
+
+    fun publishTrackingStatus(message: String) {
+        trackingStatusMessage = message
+        trackingToken += 1
+    }
+
+    fun openDefaultAppsSettings() {
+        runCatching {
+            context.startActivity(
+                Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }.onFailure {
+            publishTrackingStatus("Open Android Settings > Apps > Default apps > SMS app to finish setup.")
+        }
+    }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
         statusRefresh += 1
         if (granted) {
-            evaluateTrackingSetup(context, viewModel, onStatus = { trackingStatusMessage = it })
+            evaluateTrackingSetup(context, viewModel, onStatus = { publishTrackingStatus(it) })
         } else {
-            trackingStatusMessage = "Notification permission is required to show fraud alerts."
+            publishTrackingStatus("Notification permission is required to show fraud alerts.")
         }
     }
 
@@ -137,11 +155,11 @@ fun SettingsScreen(repository: AppRepository) {
             evaluateTrackingSetup(
                 context,
                 viewModel,
-                onStatus = { trackingStatusMessage = it },
+                onStatus = { publishTrackingStatus(it) },
                 notificationPermissionLauncher = notificationPermissionLauncher,
             )
         } else {
-            trackingStatusMessage = "SMS permission is required for automatic message tracking."
+            publishTrackingStatus("SMS permission is required for automatic message tracking.")
         }
     }
 
@@ -153,12 +171,12 @@ fun SettingsScreen(repository: AppRepository) {
             evaluateTrackingSetup(
                 context = context,
                 viewModel = viewModel,
-                onStatus = { trackingStatusMessage = it },
+                onStatus = { publishTrackingStatus(it) },
                 smsPermissionLauncher = smsPermissionLauncher,
                 notificationPermissionLauncher = notificationPermissionLauncher,
             )
         } else {
-            trackingStatusMessage = "If prompted, choose this app as the default SMS handler, then come back here."
+            publishTrackingStatus("If prompted, choose this app as the default SMS handler, then come back here.")
         }
     }
 
@@ -173,7 +191,7 @@ fun SettingsScreen(repository: AppRepository) {
         }
     }
 
-    LaunchedEffect(trackingStatusMessage) {
+    LaunchedEffect(trackingStatusMessage, trackingToken) {
         val status = trackingStatusMessage ?: return@LaunchedEffect
         statusTone = when {
             status.contains("enabled", ignoreCase = true) ||
@@ -185,8 +203,11 @@ fun SettingsScreen(repository: AppRepository) {
                 status.contains("continue", ignoreCase = true) -> BannerTone.Error
             else -> BannerTone.Info
         }
+        val currentToken = trackingToken
         kotlinx.coroutines.delay(2400)
-        trackingStatusMessage = null
+        if (trackingToken == currentToken) {
+            trackingStatusMessage = null
+        }
     }
 
     val defaultSmsApp = remember(statusRefresh) { SmsTrackingPermissions.isDefaultSmsApp(context) }
@@ -283,7 +304,7 @@ fun SettingsScreen(repository: AppRepository) {
                             Text(
                                 text = when {
                                     trackingReady -> "Everything required is in place. You can keep monitoring on or refresh status anytime."
-                                    !defaultSmsApp -> "Start by making the app the default SMS handler."
+                                    !defaultSmsApp -> "Start by making the app the default SMS handler. If Samsung hides it, open Default apps from the button below."
                                     !smsPermissionGranted -> "Next, let Android grant SMS read access."
                                     !notificationPermissionGranted -> "Then enable notifications for fraud alerts."
                                     else -> "Finish by turning on automatic monitoring."
@@ -298,7 +319,7 @@ fun SettingsScreen(repository: AppRepository) {
                                 detail = if (defaultSmsApp) {
                                     "This device already trusts the app to receive SMS messages."
                                 } else {
-                                    "Tap below to request the SMS role from Android. If Samsung still hides the app, reinstall the latest APK and check the SMS list again."
+                                    "Tap below to request the SMS role from Android. If Samsung still hides the app, open Default apps and choose SMS app manually."
                                 },
                             )
                             TrackingChecklistItem(
@@ -330,8 +351,8 @@ fun SettingsScreen(repository: AppRepository) {
                                 active = trackingStep.currentStep == 3,
                                 detail = when {
                                     state.smsMonitoring && trackingReady -> "Monitoring is active and ready for live analysis."
-                                    state.smsMonitoring -> "The switch is on, but the device still needs permissions."
-                                    else -> "Once the steps above are complete, enable tracking."
+                                    state.smsMonitoring -> "The switch is on, but Android still has not accepted the app as the default SMS handler."
+                                    else -> "Complete the steps above, then enable tracking from here."
                                 },
                             )
                         }
@@ -418,11 +439,16 @@ fun SettingsScreen(repository: AppRepository) {
                         onClick = {
                             if (defaultSmsApp) {
                                 statusRefresh += 1
-                                trackingStatusMessage = "SMS role status refreshed."
+                                publishTrackingStatus("SMS role status refreshed.")
                             } else {
                                 defaultSmsLauncher.launch(SmsTrackingPermissions.buildDefaultSmsRoleIntent(context))
                             }
                         },
+                    )
+
+                    PrimaryButton(
+                        text = "Open default apps",
+                        onClick = { openDefaultAppsSettings() },
                     )
                 }
             }
@@ -451,7 +477,7 @@ private fun evaluateTrackingSetup(
 ) {
     when {
         !SmsTrackingPermissions.isDefaultSmsApp(context) -> {
-            onStatus("Set this app as the default SMS handler to continue. On Samsung, check Settings > Apps > Default apps > SMS app after reinstalling the latest build.")
+            onStatus("Set this app as the default SMS handler to continue. If it is missing from the SMS list, use Open default apps and choose it manually.")
         }
         !SmsTrackingPermissions.isSmsPermissionGranted(context) -> {
             smsPermissionLauncher?.launch(Manifest.permission.RECEIVE_SMS)
@@ -477,7 +503,7 @@ private fun startAutomaticTrackingSetup(
     onStatus: (String) -> Unit,
 ) {
     if (!SmsTrackingPermissions.isDefaultSmsApp(context)) {
-        onStatus("Please set this app as the default SMS handler first. If it is missing from Samsung's SMS list, reinstall the latest APK and check again.")
+        onStatus("Please set this app as the default SMS handler first. If it is missing from the SMS list, open Default apps and choose it manually.")
         defaultSmsLauncher.launch(SmsTrackingPermissions.buildDefaultSmsRoleIntent(context))
         return
     }

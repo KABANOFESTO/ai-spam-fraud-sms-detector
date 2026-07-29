@@ -20,10 +20,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -31,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -221,6 +225,8 @@ fun DashboardScreen(
     var pendingDeleteDataset by remember { mutableStateOf<DatasetDto?>(null) }
     var bannerMessage by remember { mutableStateOf<String?>(null) }
     var bannerTone by remember { mutableStateOf(BannerTone.Info) }
+    var bannerToken by remember { mutableIntStateOf(0) }
+    var modelGuidanceExpanded by rememberSaveable { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         selectedUri = uri
     }
@@ -235,8 +241,15 @@ fun DashboardScreen(
                 status.contains("unable", ignoreCase = true) -> BannerTone.Error
             else -> BannerTone.Success
         }
+        bannerToken += 1
+    }
+
+    LaunchedEffect(bannerToken) {
+        val message = bannerMessage ?: return@LaunchedEffect
         kotlinx.coroutines.delay(2500)
-        bannerMessage = null
+        if (bannerMessage == message) {
+            bannerMessage = null
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -312,6 +325,8 @@ fun DashboardScreen(
                 NoActiveModelCard(
                     hasDatasets = state.datasets.isNotEmpty(),
                     hasModels = state.models.isNotEmpty(),
+                    expanded = modelGuidanceExpanded,
+                    onToggleExpanded = { modelGuidanceExpanded = !modelGuidanceExpanded },
                     onReload = { viewModel.load() },
                 )
             }
@@ -472,6 +487,8 @@ private fun uriToMultipart(context: Context, uri: Uri): MultipartBody.Part {
 private fun NoActiveModelCard(
     hasDatasets: Boolean,
     hasModels: Boolean,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onReload: () -> Unit,
 ) {
     SurfaceCard(modifier = Modifier.fillMaxWidth()) {
@@ -485,11 +502,6 @@ private fun NoActiveModelCard(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
-            Text(
-                text = "Once you import a labeled dataset and run retraining, the active model will appear here with accuracy, F1 score, and deployment details.",
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-            )
-
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 StatusBadge(
                     text = if (hasDatasets) "Dataset uploaded" else "No dataset yet",
@@ -501,11 +513,31 @@ private fun NoActiveModelCard(
                 )
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Next steps", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                Text(text = "1. Upload a labeled SMS dataset")
-                Text(text = "2. Start retraining from the admin dashboard")
-                Text(text = "3. Activate the best model and review evaluation metrics")
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = if (expanded) "Hide setup guidance" else "Show setup guidance",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                IconButton(onClick = onToggleExpanded) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        contentDescription = null,
+                    )
+                }
+            }
+
+            if (expanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Once you upload a labeled dataset and retrain, the active model will appear here with accuracy, F1 score, and deployment details.",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                    Text(text = "Next steps", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    Text(text = "1. Upload a labeled SMS dataset")
+                    Text(text = "2. Start retraining from the admin dashboard")
+                    Text(text = "3. Activate the best model and review evaluation metrics")
+                }
             }
 
             PrimaryButton(

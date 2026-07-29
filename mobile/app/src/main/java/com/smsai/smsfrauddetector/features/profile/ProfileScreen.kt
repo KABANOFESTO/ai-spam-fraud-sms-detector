@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -155,6 +156,7 @@ fun ProfileScreen(repository: AppRepository, onLogout: () -> Unit) {
     var editorOpen by rememberSaveable { mutableStateOf(false) }
     var bannerMessage by remember { mutableStateOf<String?>(null) }
     var bannerTone by remember { mutableStateOf(BannerTone.Info) }
+    var bannerToken by remember { mutableIntStateOf(0) }
 
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         selectedPhotoUri = uri?.toString()
@@ -179,8 +181,15 @@ fun ProfileScreen(repository: AppRepository, onLogout: () -> Unit) {
             removePhotoRequested = false
             editorOpen = false
         }
+        bannerToken += 1
+    }
+
+    LaunchedEffect(bannerToken) {
+        val message = bannerMessage ?: return@LaunchedEffect
         kotlinx.coroutines.delay(2400)
-        bannerMessage = null
+        if (bannerMessage == message) {
+            bannerMessage = null
+        }
     }
 
     val displayedPhoto = when {
@@ -266,6 +275,10 @@ fun ProfileScreen(repository: AppRepository, onLogout: () -> Unit) {
             SurfaceCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(text = "Profile summary", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "Your account details, photo, and password stay in one place.",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
                     Text(text = "@$username", fontWeight = FontWeight.Bold)
                     Text(text = "${firstName.ifBlank { "First name" }} ${lastName.ifBlank { "Last name" }}".trim())
                     Text(
@@ -395,17 +408,8 @@ private fun ProfileHeroContent(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        StatusBadge(text = "Secure account", color = MaterialTheme.colorScheme.secondary, compact = true)
-        Text(text = "Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text(
-            text = "Your profile stays one tap away. Edit your details in a compact bottom sheet, upload a photo, or remove it instantly.",
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            StatusBadge(text = "Live sync", color = MaterialTheme.colorScheme.primary, compact = true)
-            StatusBadge(text = "Photo ready", color = MaterialTheme.colorScheme.primary, compact = true)
-            StatusBadge(text = "Password change", color = MaterialTheme.colorScheme.primary, compact = true)
-        }
+        StatusBadge(text = "Account", color = MaterialTheme.colorScheme.secondary, compact = true)
+        Text(text = "Your profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         if (username.isNotBlank() || firstName.isNotBlank() || lastName.isNotBlank()) {
             Text(
                 text = "@$username",
@@ -416,14 +420,14 @@ private fun ProfileHeroContent(
         if (compactLayout) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 PrimaryButton(
-                    text = "Edit profile",
+                    text = "Edit details",
                     onClick = onEdit,
                     modifier = Modifier.fillMaxWidth(),
                     trailingIcon = true,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     PrimaryButton(
-                        text = if (hasPhoto) "Change photo" else "Upload photo",
+                        text = if (hasPhoto) "Change photo" else "Add photo",
                         onClick = onPickPhoto,
                         modifier = Modifier.weight(1f),
                         trailingIcon = true,
@@ -444,13 +448,13 @@ private fun ProfileHeroContent(
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 PrimaryButton(
-                    text = "Edit profile",
+                    text = "Edit details",
                     onClick = onEdit,
                     modifier = Modifier.weight(1f),
                     trailingIcon = true,
                 )
                 PrimaryButton(
-                    text = if (hasPhoto) "Change photo" else "Upload photo",
+                    text = if (hasPhoto) "Change photo" else "Add photo",
                     onClick = onPickPhoto,
                     modifier = Modifier.weight(1f),
                     trailingIcon = true,
@@ -512,7 +516,7 @@ private fun ProfileEditorSheet(
             Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
                 Text(text = "Edit profile", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    text = "Update your name, password, or profile photo from this compact panel.",
+                    text = "Change your name, password, or profile photo from this compact panel.",
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                 )
             }
